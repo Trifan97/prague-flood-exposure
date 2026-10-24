@@ -1,0 +1,55 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "prague-flood-exposure"
+version = "0.1.0"
+description = "Prague buildings exposed to river and small-stream flood zones, via a distributed spatial join in Apache Sedona / Wherobots."
+readme = "README.md"
+license = "MIT"
+authors = [{ name = "Tudor Trifan" }]
+requires-python = ">=3.11"
+# Loose ranges: what the code needs. Exact tested versions live in requirements.txt.
+# pyspark stays on 4.0.x because the Wherobots v2 runtime is Spark 4.0: code written
+# against a newer Spark locally could call APIs the cluster does not have.
+dependencies = [
+    "apache-sedona>=1.9,<1.10",
+    # sedona.spark imports pandas on start-up, but apache-sedona does not declare it.
+    "pandas>=2.2",
+    "pyspark>=4.0,<4.1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8",
+    "ruff>=0.6",
+    "mypy>=1.11",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# --strict-markers turns a mistyped marker into an error instead of a silently unmarked test.
+addopts = ["--import-mode=importlib", "--strict-markers"]
+markers = [
+    "spark: starts a local Spark session and needs Java (skip with: pytest -m 'not spark')",
+]
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+# E/F: pycodestyle + pyflakes, I: import order, B: bugbear, UP: modern syntax, N: naming
+select = ["E", "F", "I", "B", "UP", "N"]
+
+[tool.mypy]
+strict = true
+files = ["src", "tests"]
+
+[[tool.mypy.overrides]]
+# apache-sedona ships without type hints, so mypy treats its objects as untyped (Any).
+module = ["sedona", "sedona.*"]
+ignore_missing_imports = true

@@ -1,0 +1,13 @@
+# Store text files with LF endings so diffs are the same on Windows and on the Linux
+# machines Wherobots runs on.
+* text=auto eol=lf
+
+# Windows scripts must keep CRLF endings or cmd.exe misreads them.
+*.cmd text eol=crlf
+*.bat text eol=crlf
+*.ps1 text eol=crlf
+
+# Spatial data is binary: never diff it or convert its line endings.
+*.parquet binary
+*.tif binary
+*.tiff binary

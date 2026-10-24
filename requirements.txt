@@ -1,0 +1,25 @@
+# Exact versions tested with Python 3.11.9 on Windows 11 (pip freeze, editable package excluded).
+# Loose ranges live in pyproject.toml; this file makes the environment reproducible.
+apache-sedona==1.9.1
+ast_serialize==0.13.1
+attrs==26.1.0
+colorama==0.4.6
+iniconfig==2.3.1
+librt==0.16.0
+mypy==2.4.0
+mypy_extensions==1.1.0
+numpy==2.4.6
+packaging==26.3
+pandas==3.1.0
+pathspec==1.1.1
+pluggy==1.7.0
+py4j==0.10.9.9
+Pygments==2.21.0
+pyspark==4.0.4
+pytest==9.1.1
+python-dateutil==3.0.0
+ruff==0.17.2
+shapely==2.2.0
+six==1.17.0
+typing_extensions==4.16.0
+tzdata==2026.5
