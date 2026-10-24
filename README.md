@@ -1,7 +1,7 @@
 # Prague flood exposure: a distributed spatial join in Apache Sedona
 
-> **Status: work in progress (step 1 of 8: inputs downloaded and pinned).** There is no
-> analysis code and there are no results yet. The sections below describe what the pipeline will
+> **Status: work in progress (step 2 of 8: every layer loads into Sedona in one CRS).**
+> There are no exposure results yet. The sections below describe what the pipeline will
 > do and what it already knows it cannot do.
 
 Which Prague buildings sit inside official flood zones, and which of the city's 57
@@ -14,9 +14,11 @@ CARTO map.
 
 1. Load the official IPR Praha flood zones, Overture building footprints and the
    57 district polygons.
-2. Re-project every layer to one metric CRS, UTM 33N (EPSG:32633).
+2. Re-project every layer to one metric CRS, UTM 33N (EPSG:32633), and repair invalid
+   polygons.
 3. Join buildings to flood zones in Sedona, so each building gets the most frequent
-   flood it is exposed to (Q5, Q20, Q50 or Q100).
+   flood it is exposed to (Q5, Q20, Q50 or Q100). Buildings behind the city's flood
+   defences are flagged separately as residual risk.
 4. Count exposed buildings and their footprint area per flood zone and per district.
 5. Rank districts by exposure and export GeoParquet for CARTO.
 
@@ -35,9 +37,16 @@ CARTO map.
   layer the project found, so it is not covered.
 - **Extents, not depths.** A building is either inside a zone or not. The open layers
   carry no water depth.
-- **Flood defences.** Central Prague is protected by permanent and mobile barriers. The
-  plain Q-zones do not show that protection, so exposure behind the barriers will be
-  flagged separately using IPR's categorised layer (protected by the city or not).
+- **Flood defences are assumed to hold.** Central Prague is protected by permanent and
+  mobile barriers, and IPR draws the Q-zones with them in place: only about 1% of the
+  area the city protects lies inside the Q100 extent. The exposure counts are therefore
+  for the case where the defences hold. Buildings behind the defences will be reported
+  separately as residual risk (flooded only if the defences fail), using IPR's 2014
+  categorised layer. That older layer does not cover 1.6 km² of the 2021 Q100 extent.
+- **Some source polygons are repaired.** 14 IPR polygons, including the only polygon
+  of the Q20 layer, have rings that touch themselves at a point. ArcGIS allows that; the
+  OGC rules Sedona follows do not. `ST_MakeValid` repairs them and leaves every area
+  unchanged (checked to 0.001%).
 - **Hazard vintage.** IPR's catalogue dates the Vltava Q-zones to 2021, the small-stream
   zones to 2024 and the categorised layer to 2014. The Metropolitan Plan publishes a
   newer (2026) categorised layer, but its published code list does not describe its
@@ -64,7 +73,7 @@ files are never edited; all cleaning happens in code.
 | File | Contents | Source | Licence |
 |---|---|---|---|
 | `ipr_vltava_q5/q20/q50/q100.geojson` | Vltava flood extents for discharges of 1,770 / 2,720 / 3,440 / 4,020 m³/s below the Berounka confluence. Each is essentially one polygon of 56,000 to 105,000 vertices | [IPR Praha open data](https://www.geoportalpraha.cz/en/data-and-services/open-data) | CC BY 4.0, "data base © IPR Praha" |
-| `ipr_small_streams.geojson` | 2,201 polygons on small streams: active zone (`kateg` 1) and Q100 flood area (2) | IPR Praha | CC BY 4.0 |
+| `ipr_small_streams.geojson` | 2,201 polygons on small streams, in two non-overlapping parts of the Q100 flood area: the active zone (`kateg` 1) and the rest (2) | IPR Praha | CC BY 4.0 |
 | `ipr_vltava_categories.geojson` | 231 Vltava/Berounka zone polygons by category; `kateg` 4 = designated for protection by the city's flood defences | IPR Praha | CC BY 4.0 |
 | `ipr_districts.geojson` | The 57 city districts (*městské části*) | IPR Praha | CC BY 4.0 |
 | `overture_buildings_prague_2026-10-21.0.parquet` | 306,290 building footprints whose bounding boxes overlap Prague's, as GeoParquet, cut from [Overture Maps](https://overturemaps.org/) release 2026-10-21.0 with DuckDB | Overture Maps | ODbL |
@@ -149,6 +158,7 @@ src/prague_flood/   the pipeline package
   __main__.py       command line: python -m prague_flood download
   config.py         paths, CRSs, pinned inputs (URL + SHA-256)
   download.py       checksum-verified downloads of the IPR layers
+  load.py           every layer into Sedona: English columns, decoded codes, EPSG:32633
   overture.py       DuckDB extract of Prague's buildings from Overture on S3
   session.py        local Spark session with Sedona registered
 tests/              pytest suite (markers: `spark` needs Java, `data` needs data/raw)

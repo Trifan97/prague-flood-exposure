@@ -40,7 +40,8 @@ SOURCE_CRS: Final = "EPSG:4326"
 # UTM zone 33N, in metres, so lengths and areas come out in m and m².
 # Prague lies about 0.6° west of the zone's central meridian (15°E). That close to it,
 # UTM's scale error is about 0.04%, so areas are within 0.1% of their true size.
-TARGET_CRS: Final = "EPSG:32633"
+TARGET_EPSG: Final = 32633
+TARGET_CRS: Final = f"EPSG:{TARGET_EPSG}"
 
 # --- Inputs ---
 
@@ -77,15 +78,13 @@ IPR_LAYERS: Final = {
         "ipr_vltava_q100.geojson",
         "2fa80e357e7058bcedc4d369f9fc7adead07842c729a6ecd0a5c58199af9d5f6",
     ),
-    # Small streams. Field `kateg`: 1 = active zone, 2 = Q100 flood area.
+    # Small streams, by zone (see SMALL_STREAM_ZONES).
     "small_streams": _ipr(
         "00242330738c4326af30663eb7c6d7f9",
         "ipr_small_streams.geojson",
         "9c7ec24ae028301622209410e28d1a1532562c13228bb7fb88e369fa536cdba0",
     ),
-    # Vltava and Berounka zones by category. Field `kateg`: 1 = active, 2 = flow-through,
-    # 3 = non-flow-through, 4 = designated for protection by the city's flood defences,
-    # 5 = designated for individual protection.
+    # Vltava and Berounka zones, by category (see VLTAVA_CATEGORIES).
     "vltava_categories": _ipr(
         "7a4bf2d99de44645ac5768f65d8a9692",
         "ipr_vltava_categories.geojson",
@@ -97,6 +96,32 @@ IPR_LAYERS: Final = {
         "ipr_districts.geojson",
         "4f71b0ef1b524b768b95622b6858eaf48e80094d15d4eb8f97f9f80a0fdf44fd",
     ),
+}
+
+# Return period, in years, of each Vltava flood-extent layer.
+VLTAVA_RETURN_PERIODS: Final = {
+    "vltava_q5": 5,
+    "vltava_q20": 20,
+    "vltava_q50": 50,
+    "vltava_q100": 100,
+}
+
+# Code lists for the `kateg` field, from the domains published with IPR's feature services.
+# The two small-stream codes never overlap: together they make up the Q100 flood area
+# (a data test checks this).
+SMALL_STREAM_ZONES: Final = {
+    1: "active_zone",  # aktivní zóna: the part of the Q100 area where the flood flows fastest
+    2: "q100_outside_active_zone",  # záplavové území pro Q100: the rest of the Q100 area
+}
+# Only about 1% of the area protected by the city lies inside the Vltava Q100 extent: the
+# Q-zones are drawn with the flood defences in place. "protected_by_city" therefore marks
+# residual risk, i.e. buildings that flood only if the defences fail (a data test checks this).
+VLTAVA_CATEGORIES: Final = {
+    1: "active",  # aktivní
+    2: "flow_through",  # průtočná
+    3: "non_flow_through",  # neprůtočná
+    4: "protected_by_city",  # určená k ochraně městem: behind the city's flood defences
+    5: "protected_individually",  # určená k ochraně individuálně
 }
 
 # Overture Maps buildings (ODbL). Overture keeps only recent releases on S3, so this one

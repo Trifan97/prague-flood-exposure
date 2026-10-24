@@ -77,9 +77,12 @@ def test_districts_fit_inside_the_buildings_bbox() -> None:
 
 @pytest.mark.parametrize(
     ("name", "codes"),
-    [("small_streams", {1, 2}), ("vltava_categories", {1, 2, 3, 4, 5})],
+    [
+        ("small_streams", set(config.SMALL_STREAM_ZONES)),
+        ("vltava_categories", set(config.VLTAVA_CATEGORIES)),
+    ],
 )
 def test_category_codes_are_the_documented_ones(name: str, codes: set[int]) -> None:
-    # The meaning of each code is written next to the layer in config.py.
+    # Every code in the data must have a label in config.py, and every label a code.
     found = {int(f["properties"]["kateg"]) for f in read_geojson(name)["features"]}
     assert found == codes
