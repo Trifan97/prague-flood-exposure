@@ -1,30 +1,18 @@
 """hazard.py on the real flood layers: the pieces are valid and small, and lose no area."""
 
-from collections.abc import Iterator
-
 import pytest
 from pyspark.sql import DataFrame, SparkSession
 
-from prague_flood import config, load
-from prague_flood.hazard import hazard_zones
+from prague_flood import config
 
 pytestmark = [pytest.mark.data, pytest.mark.spark]
 
 
-@pytest.fixture(scope="module")
-def zones(spark: SparkSession, raw_data: None) -> Iterator[DataFrame]:
-    vltava = load.load_vltava_zones(spark).cache()
-    streams = load.load_small_streams(spark).cache()
-    categories = load.load_vltava_categories(spark).cache()
-    pieces = hazard_zones(vltava, streams, categories).cache()
-
-    vltava.createOrReplaceTempView("vltava_zones")
-    streams.createOrReplaceTempView("small_streams")
-    categories.createOrReplaceTempView("vltava_categories")
-    pieces.createOrReplaceTempView("hazard_zones")
-    yield pieces
-    for df in (vltava, streams, categories, pieces):
-        df.unpersist()
+@pytest.fixture
+def zones(layers: dict[str, DataFrame]) -> DataFrame:
+    # Built by the shared `layers` fixture (conftest.py), which also registers the
+    # hazard_zones, vltava_zones, small_streams and vltava_categories views.
+    return layers["hazard_zones"]
 
 
 def test_pieces_are_valid_small_and_in_utm(spark: SparkSession, zones: DataFrame) -> None:

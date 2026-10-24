@@ -1,7 +1,7 @@
 # Prague flood exposure: a distributed spatial join in Apache Sedona
 
-> **Status: work in progress (step 3 of 8: hazard zones prepared for the join).**
-> There are no exposure results yet. The sections below describe what the pipeline will
+> **Status: work in progress (step 4 of 8: the per-building spatial join works).**
+> District totals and the CARTO export come next. The sections below describe what the pipeline will
 > do and what it already knows it cannot do.
 
 Which Prague buildings sit inside official flood zones, and which of the city's 57
@@ -69,6 +69,33 @@ On the development laptop (local Spark, 4 cores), joining the 306,290 buildings 
 it at least 60 times faster here. The two runs could not be compared row by row because
 the unsplit one never finished; the area test is what shows the split loses nothing.
 
+### The join
+
+`join.py` produces one row per building inside Prague:
+
+1. **District.** Each building gets the district that contains `ST_PointOnSurface` of its
+   footprint. Unlike the centroid, that point always lies on the footprint, even for an
+   L-shaped building. A building whose point falls outside every district is outside
+   Prague and is dropped (306,290 in the extract, 208,621 inside the city).
+2. **Hazard.** Every building is joined to every hazard piece its footprint touches
+   (`ST_Intersects`), and the matches are collapsed to one row per building: the
+   smallest Vltava return period, whether it touches the small-stream Q100 area or its
+   active zone, and whether it touches the area behind the city's defences.
+3. **Two rules.** A building counts as exposed when any part of its footprint touches a
+   zone. The stricter rule, that its representative point lies in a zone, is evaluated in
+   the same join: the point lies on the footprint, so any zone that contains it is already
+   among the matched pairs.
+
+**Broadcast or partition?** The 7,940 zone pieces and 57 districts fit in memory, so
+they are *broadcast*: every worker gets a copy with an R-tree index (Sedona's
+`BroadcastIndexJoin`), and the 300,000 buildings never move between workers. The
+alternative, Sedona's `RangeJoin`, partitions both sides by space and shuffles them.
+Both give identical results (checked in a unit test and on the full city). On the
+development laptop (4 cores, two runs each), the whole exposure step took 57-63 s
+broadcast and 105-132 s with the RangeJoin: roughly half the time. A RangeJoin is for
+when neither side fits in memory, for example all of Europe's buildings against all of
+its flood zones.
+
 ## Known limitations (so far)
 
 - **These are river and small-stream floods, not flash floods from rain.** The zones
@@ -77,6 +104,10 @@ the unsplit one never finished; the area test is what shows the split loses noth
   layer the project found, so it is not covered.
 - **Extents, not depths.** A building is either inside a zone or not. The open layers
   carry no water depth.
+- **Touching counts as exposed.** A building whose footprint grazes a zone's edge counts
+  in full, which overstates exposure. The stricter point rule is reported alongside: on
+  the full city it counts 13% fewer exposed buildings (4,709 against 5,421). Footprint
+  areas are whole buildings, not the part inside the zone.
 - **Flood defences are assumed to hold.** Central Prague is protected by permanent and
   mobile barriers, and IPR draws the Q-zones with them in place: only about 1% of the
   area the city protects lies inside the Q100 extent. The exposure counts are therefore
@@ -172,7 +203,7 @@ python -m pip install -e . --no-deps
 # Install Java (see above), then in every new window:
 . .\scripts\dev_env.ps1
 python -m prague_flood download   # ~80 MB of inputs into data/raw (about 7 minutes)
-pytest                            # everything, including the Spark tests
+pytest                            # everything, including Spark and data tests (~5 min)
 pytest -m "not spark"             # fast tests only, no JVM
 ```
 
@@ -200,6 +231,7 @@ src/prague_flood/   the pipeline package
   download.py       checksum-verified downloads of the IPR layers
   load.py           every layer into Sedona: English columns, decoded codes, EPSG:32633
   hazard.py         one hazard-zone table, cut into pieces of at most 256 vertices
+  join.py           buildings to districts and hazard zones: one row per building
   overture.py       DuckDB extract of Prague's buildings from Overture on S3
   session.py        local Spark session with Sedona registered
 tests/              pytest suite (markers: `spark` needs Java, `data` needs data/raw)

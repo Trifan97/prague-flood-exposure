@@ -3,33 +3,15 @@
 These tests also pin the facts about the flood layers that later steps rely on.
 """
 
-from collections.abc import Callable, Iterator
-
 import pytest
 from pyspark.sql import DataFrame, SparkSession
 
-from prague_flood import config, load
+from prague_flood import config
 
 pytestmark = [pytest.mark.data, pytest.mark.spark]
 
-LOADERS: dict[str, Callable[[SparkSession], DataFrame]] = {
-    "districts": load.load_districts,
-    "vltava_zones": load.load_vltava_zones,
-    "small_streams": load.load_small_streams,
-    "vltava_categories": load.load_vltava_categories,
-    "buildings": load.load_buildings,
-}
-
-
-@pytest.fixture(scope="module")
-def layers(spark: SparkSession, raw_data: None) -> Iterator[dict[str, DataFrame]]:
-    # cache(): each layer is read and re-projected once, not once per test.
-    loaded = {name: loader(spark).cache() for name, loader in LOADERS.items()}
-    for name, df in loaded.items():
-        df.createOrReplaceTempView(name)
-    yield loaded
-    for df in loaded.values():
-        df.unpersist()
+# The `layers` fixture in conftest.py loads these and registers each as a SQL view.
+LOADED = ["districts", "vltava_zones", "small_streams", "vltava_categories", "buildings"]
 
 
 def one(spark: SparkSession, sql: str) -> object:
@@ -38,7 +20,7 @@ def one(spark: SparkSession, sql: str) -> object:
     return row[0]
 
 
-@pytest.mark.parametrize("name", list(LOADERS))
+@pytest.mark.parametrize("name", LOADED)
 def test_layer_is_valid_in_utm_and_inside_prague(
     spark: SparkSession, layers: dict[str, DataFrame], name: str
 ) -> None:
