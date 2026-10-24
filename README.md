@@ -1,6 +1,6 @@
 # Prague flood exposure: a distributed spatial join in Apache Sedona
 
-> **Status: work in progress (step 2 of 8: every layer loads into Sedona in one CRS).**
+> **Status: work in progress (step 3 of 8: hazard zones prepared for the join).**
 > There are no exposure results yet. The sections below describe what the pipeline will
 > do and what it already knows it cannot do.
 
@@ -28,6 +28,46 @@ CARTO map.
   the aggregation.
 - **Out of scope:** flood *simulation* (hydraulic or rain-on-grid modelling), machine
   learning, and any city other than Prague.
+
+## Method
+
+### Hazard zones
+
+`hazard.py` stacks the flood layers into one table with a `hazard`, `return_period` and
+`zone` per polygon:
+
+- **Vltava extents** Q5, Q20, Q50 and Q100. They stay nested (the Q100 zone contains the
+  Q5 zone): each building later takes the smallest return period it touches, so no
+  geometry has to be cut into bands.
+- **Small streams.** Both parts (active zone and the rest) count as Q100.
+- **Residual risk:** the area behind the city's flood defences, with no return period.
+
+### Splitting giant polygons
+
+A spatial join first compares bounding boxes, and only pairs whose boxes overlap get the
+exact, expensive geometry test. The Q5 extent arrives as one polygon of 105,496 vertices
+whose box covers much of central Prague. Every building in that box passes the cheap
+test, and each exact test then walks a 105,000-vertex outline. `ST_SubDivideExplode`
+cuts every zone into pieces of at most 256 vertices, which have tight boxes and short
+outlines:
+
+| Zone | Polygons before | Largest before (vertices) | Pieces after |
+|---|---:|---:|---:|
+| Vltava Q5 | 3 | 105,496 | 897 |
+| Vltava Q20 | 1 | 77,454 | 657 |
+| Vltava Q50 | 2 | 68,430 | 565 |
+| Vltava Q100 | 2 | 56,223 | 458 |
+| Small streams, active zone | 449 | 55,071 | 1,585 |
+| Small streams, rest of Q100 | 1,752 | 9,741 | 3,656 |
+| Residual (behind defences) | 20 | 2,965 | 122 |
+| **Total** | **2,229** | | **7,940** |
+
+The pieces do not overlap, so every zone's area is unchanged (checked by a data test).
+On the development laptop (local Spark, 4 cores), joining the 306,290 buildings to the
+7,940 pieces with `ST_Intersects` takes about 10 seconds. The same join against the
+2,229 unsplit zones was cancelled after 10 minutes without finishing, so splitting made
+it at least 60 times faster here. The two runs could not be compared row by row because
+the unsplit one never finished; the area test is what shows the split loses nothing.
 
 ## Known limitations (so far)
 
@@ -159,6 +199,7 @@ src/prague_flood/   the pipeline package
   config.py         paths, CRSs, pinned inputs (URL + SHA-256)
   download.py       checksum-verified downloads of the IPR layers
   load.py           every layer into Sedona: English columns, decoded codes, EPSG:32633
+  hazard.py         one hazard-zone table, cut into pieces of at most 256 vertices
   overture.py       DuckDB extract of Prague's buildings from Overture on S3
   session.py        local Spark session with Sedona registered
 tests/              pytest suite (markers: `spark` needs Java, `data` needs data/raw)

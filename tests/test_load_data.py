@@ -22,13 +22,7 @@ LOADERS: dict[str, Callable[[SparkSession], DataFrame]] = {
 
 
 @pytest.fixture(scope="module")
-def layers(spark: SparkSession) -> Iterator[dict[str, DataFrame]]:
-    raw = [config.RAW_DIR / s.filename for s in config.IPR_LAYERS.values()]
-    raw.append(config.RAW_DIR / config.BUILDINGS_FILENAME)
-    missing = [p.name for p in raw if not p.exists()]
-    if missing:
-        pytest.skip(f"not downloaded: {missing}; run: python -m prague_flood download")
-
+def layers(spark: SparkSession, raw_data: None) -> Iterator[dict[str, DataFrame]]:
     # cache(): each layer is read and re-projected once, not once per test.
     loaded = {name: loader(spark).cache() for name, loader in LOADERS.items()}
     for name, df in loaded.items():

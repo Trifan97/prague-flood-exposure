@@ -124,6 +124,11 @@ VLTAVA_CATEGORIES: Final = {
     5: "protected_individually",  # určená k ochraně individuálně
 }
 
+# Before the join, every hazard polygon is cut into pieces with at most this many
+# vertices (see hazard.subdivide). 256 is the default of PostGIS's ST_Subdivide: small
+# enough for tight bounding boxes, large enough to keep the number of pieces modest.
+MAX_VERTICES: Final = 256
+
 # Overture Maps buildings (ODbL). Overture keeps only recent releases on S3, so this one
 # will eventually be deleted. The SHA-256 still identifies the exact extract used.
 OVERTURE_RELEASE: Final = "2026-10-21.0"
