@@ -15,6 +15,8 @@ requires-python = ">=3.11"
 # against a newer Spark locally could call APIs the cluster does not have.
 dependencies = [
     "apache-sedona>=1.9,<1.10",
+    # Cuts the Prague buildings out of Overture's GeoParquet on S3 (download stage only).
+    "duckdb>=1.1",
     # sedona.spark imports pandas on start-up, but apache-sedona does not declare it.
     "pandas>=2.2",
     "pyspark>=4.0,<4.1",
@@ -33,9 +35,11 @@ where = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 # --strict-markers turns a mistyped marker into an error instead of a silently unmarked test.
-addopts = ["--import-mode=importlib", "--strict-markers"]
+# -rs prints the reason for every skipped test, so a skip is never silent.
+addopts = ["--import-mode=importlib", "--strict-markers", "-rs"]
 markers = [
     "spark: starts a local Spark session and needs Java (skip with: pytest -m 'not spark')",
+    "data: checks the downloaded files in data/raw; skipped until they are downloaded",
 ]
 
 [tool.ruff]

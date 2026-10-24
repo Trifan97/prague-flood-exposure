@@ -17,6 +17,8 @@ dist/
 
 # Spark leaves these behind when run locally (.spark/ holds its jar cache and scratch files)
 .spark/
+# DuckDB's extensions
+.duckdb/
 spark-warehouse/
 metastore_db/
 derby.log
