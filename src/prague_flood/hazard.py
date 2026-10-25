@@ -39,7 +39,14 @@ def subdivide(df: DataFrame, max_vertices: int = config.MAX_VERTICES) -> DataFra
 def hazard_zones(
     vltava_zones: DataFrame, small_streams: DataFrame, vltava_categories: DataFrame
 ) -> DataFrame:
-    """The hazard-zone table described in the module docstring."""
+    """The hazard-zone table described in the module docstring, ready for the join."""
+    return subdivide(stack_zones(vltava_zones, small_streams, vltava_categories))
+
+
+def stack_zones(
+    vltava_zones: DataFrame, small_streams: DataFrame, vltava_categories: DataFrame
+) -> DataFrame:
+    """The same table before subdivision: whole zones, which draw better on a map."""
     vltava = vltava_zones.selectExpr(
         "'vltava' AS hazard",
         "return_period",
@@ -58,4 +65,4 @@ def hazard_zones(
         "category AS zone",
         "geometry",
     )
-    return subdivide(vltava.unionByName(streams).unionByName(residual))
+    return vltava.unionByName(streams).unionByName(residual)

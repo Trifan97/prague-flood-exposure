@@ -17,8 +17,12 @@ dependencies = [
     "apache-sedona>=1.9,<1.10",
     # Cuts the Prague buildings out of Overture's GeoParquet on S3 (download stage only).
     "duckdb>=1.1",
+    # Writes the small result tables as GeoParquet (export.py); needs pyarrow for Parquet.
+    "geopandas>=1.0",
     # sedona.spark imports pandas on start-up, but apache-sedona does not declare it.
-    "pandas>=2.2",
+    # Below 3: PySpark 4.0 predates pandas 3 and still uses arguments pandas 3 deprecates.
+    "pandas>=2.2,<3",
+    "pyarrow>=15",
     "pyspark>=4.0,<4.1",
 ]
 
@@ -54,6 +58,9 @@ strict = true
 files = ["src", "tests"]
 
 [[tool.mypy.overrides]]
-# apache-sedona ships without type hints, so mypy treats its objects as untyped (Any).
-module = ["sedona", "sedona.*"]
+# These ship without type hints, so mypy treats their objects as untyped (Any).
+module = [
+    "sedona", "sedona.*", "geopandas", "geopandas.*", "pyarrow", "pyarrow.*",
+    "shapely", "shapely.*",
+]
 ignore_missing_imports = true

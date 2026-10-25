@@ -150,6 +150,19 @@ BUILDINGS_FILENAME: Final = f"overture_buildings_prague_{OVERTURE_RELEASE}.parqu
 # pinned in requirements.txt.
 BUILDINGS_SHA256: Final = "7e6204fec0162fbca0631773da05feba71781740a351b2b70d9de9c9d60cec68"
 
+# --- Outputs (GeoParquet in WGS84, for CARTO) ---
+OUTPUTS: Final = {
+    "districts": "prague_flood_districts.parquet",  # one row per district, with ranks
+    "buildings": "prague_flood_buildings.parquet",  # exposed and residual-risk buildings
+    "zones": "prague_flood_zones.parquet",  # the flood zones, whole (not subdivided)
+}
+# Required credits for anything built from the outputs (CARTO map description, README).
+ATTRIBUTION: Final = (
+    "Flood zones and districts: data base © IPR Praha (CC BY 4.0). "
+    "Buildings: © Overture Maps Foundation, © OpenStreetMap contributors, "
+    "Microsoft ML Buildings (ODbL)."
+)
+
 # DuckDB's extensions (spatial, httpfs). Its default location is the user profile on C:.
 DUCKDB_EXTENSIONS_DIR: Final = PROJECT_ROOT / ".duckdb" / "extensions"
 

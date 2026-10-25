@@ -1,7 +1,7 @@
 # Prague flood exposure: a distributed spatial join in Apache Sedona
 
-> **Status: work in progress (step 5 of 8: district totals and ranking).** The results
-> below come from a local run; the CARTO export and the Wherobots run come next.
+> **Status: work in progress (step 6 of 8: GeoParquet outputs and CARTO guide).** The
+> results below come from a local run; the Wherobots run comes next.
 
 Which Prague buildings sit inside official flood zones, and which of the city's 57
 districts (*městské části*) have the most exposed building stock? The pipeline answers
@@ -213,6 +213,24 @@ bounding-box statistics overlap Prague. That takes about 6 minutes. The extract 
 sorted by building id, so rerunning it produces the same bytes; that was checked by
 running it twice.
 
+## Outputs
+
+`python -m prague_flood run` writes three GeoParquet files in WGS84 to `data/processed/`.
+[`docs/carto.md`](docs/carto.md) walks through building the CARTO map from them, click by
+click.
+
+| File | Rows | One row per |
+|---|---:|---|
+| `prague_flood_districts.parquet` | 57 | district: totals under both exposure rules, cumulative Q5/Q20/Q50, residual risk, machine-learned share, three rankings |
+| `prague_flood_buildings.parquet` | 10,031 | building that is exposed (5,421) or behind the defences (4,610), with its class, flags and footprint area |
+| `prague_flood_zones.parquet` | 2,229 | whole flood zone with its area, for drawing under the buildings |
+
+The heavy work (re-projection, splitting, the joins) happens in Sedona. The outputs are
+small, so they are collected to the driver and written with GeoPandas, which works the
+same locally and on Wherobots. Areas are computed in UTM 33N before the geometries go
+back to WGS84 for CARTO. A data test re-projects the exported districts with PROJ (via
+GeoPandas), a second CRS library, and gets Prague's ~496 km² again.
+
 ## Environment
 
 The local environment copies the Wherobots v2 runtime, so code tested here runs there:
@@ -261,6 +279,7 @@ python -m pip install -e . --no-deps
 # Install Java (see above), then in every new window:
 . .\scripts\dev_env.ps1
 python -m prague_flood download   # ~80 MB of inputs into data/raw (about 7 minutes)
+python -m prague_flood run        # the Sedona pipeline; GeoParquet into data/processed (~2 min)
 pytest                            # everything, including Spark and data tests (~5 min)
 pytest -m "not spark"             # fast tests only, no JVM
 ```
@@ -291,10 +310,14 @@ src/prague_flood/   the pipeline package
   hazard.py         one hazard-zone table, cut into pieces of at most 256 vertices
   join.py           buildings to districts and hazard zones: one row per building
   aggregate.py      district and flood-class totals, ranked by exposed footprint area
+  export.py         small results to GeoParquet in WGS84, via GeoPandas
+  pipeline.py       the whole analysis: python -m prague_flood run
+docs/carto.md       click-by-click CARTO Builder guide
   overture.py       DuckDB extract of Prague's buildings from Overture on S3
   session.py        local Spark session with Sedona registered
 tests/              pytest suite (markers: `spark` needs Java, `data` needs data/raw)
 data/raw/           downloaded inputs (git-ignored, re-created by the download stage)
+data/processed/     GeoParquet outputs (git-ignored, re-created by the run stage)
 ```
 
 ## Licence
