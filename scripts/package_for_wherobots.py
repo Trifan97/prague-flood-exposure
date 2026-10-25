@@ -27,7 +27,12 @@ def main() -> None:
     out = ROOT / "dist" / f"prague_flood-{commit}.zip"
     out.parent.mkdir(exist_ok=True)
     # HEAD:src is the src folder of the last commit; the zip then holds prague_flood/...
-    git("archive", "--format=zip", f"--output={out}", "HEAD:src", "prague_flood")
+    # core.autocrlf=false: Git for Windows defaults to true, which would make git archive
+    # write Windows line endings. This keeps the zip byte-identical to the commit.
+    git(
+        "-c", "core.autocrlf=false",
+        "archive", "--format=zip", f"--output={out}", "HEAD:src", "prague_flood",
+    )  # fmt: skip
     print(out)
 
 
