@@ -32,6 +32,8 @@ class BBox:
 PROJECT_ROOT: Final = Path(__file__).resolve().parents[2]
 DATA_DIR: Final = PROJECT_ROOT / "data"
 RAW_DIR: Final = DATA_DIR / "raw"  # downloads exactly as published; never edited
+# Where Spark reads the inputs from, as text so it can also be an s3:// folder (Wherobots).
+RAW_URI: Final = RAW_DIR.as_posix()
 PROCESSED_DIR: Final = DATA_DIR / "processed"  # pipeline outputs for CARTO
 
 # Every source layer is downloaded in WGS84 longitude/latitude.

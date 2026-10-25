@@ -7,16 +7,22 @@ from pyspark.sql import SparkSession
 from prague_flood import aggregate, config, export, hazard, join, load
 
 
-def run(spark: SparkSession, out_dir: Path = config.PROCESSED_DIR) -> dict[str, Path]:
-    """Load, join, aggregate and export. Returns the path of each output."""
+def run(
+    spark: SparkSession, out_dir: Path = config.PROCESSED_DIR, raw_uri: str = config.RAW_URI
+) -> dict[str, Path]:
+    """Load, join, aggregate and export. Returns the path of each output.
+
+    ``raw_uri`` is the folder with the inputs (an s3:// folder on Wherobots). ``out_dir``
+    is a local folder on the machine running this code (the driver).
+    """
     # cache(): each of these feeds several later steps, and recomputing them (reading,
     # re-projecting, repairing, splitting) for every branch of every plan is the slow part.
-    buildings = load.load_buildings(spark).cache()
-    districts = load.load_districts(spark).cache()
+    buildings = load.load_buildings(spark, raw_uri).cache()
+    districts = load.load_districts(spark, raw_uri).cache()
     zones = hazard.stack_zones(
-        load.load_vltava_zones(spark),
-        load.load_small_streams(spark),
-        load.load_vltava_categories(spark),
+        load.load_vltava_zones(spark, raw_uri),
+        load.load_small_streams(spark, raw_uri),
+        load.load_vltava_categories(spark, raw_uri),
     ).cache()
     pieces = hazard.subdivide(zones).cache()
 
