@@ -1,14 +1,48 @@
 # Prague flood exposure: a distributed spatial join in Apache Sedona
 
-> **Status: work in progress (step 4 of 8: the per-building spatial join works).**
-> District totals and the CARTO export come next. The sections below describe what the pipeline will
-> do and what it already knows it cannot do.
+> **Status: work in progress (step 5 of 8: district totals and ranking).** The results
+> below come from a local run; the CARTO export and the Wherobots run come next.
 
 Which Prague buildings sit inside official flood zones, and which of the city's 57
 districts (*městské části*) have the most exposed building stock? The pipeline answers
 that with a distributed spatial join in [Apache Sedona](https://sedona.apache.org/)
 on [Wherobots](https://wherobots.com/), and exports one clean GeoParquet table for a
 CARTO map.
+
+## Results so far
+
+Of Prague's 208,621 buildings, **5,421 (2.6%) touch an official river or small-stream
+flood zone** while the flood defences hold. That is 108.6 ha of building footprint.
+**Behind the defences lie another 4,610 buildings with 181.4 ha of footprint**, which
+flood only if the defences fail. Prague's flood exposure is mostly a question of whether
+the barriers hold.
+
+| Most frequent flood a building touches | Buildings | Footprint (ha) | Of which point inside zone | At least 30 m² |
+|---|---:|---:|---:|---:|
+| Q5 | 1,264 | 12.9 | 1,253 | 799 |
+| Q20 | 1,454 | 36.3 | 1,448 | 1,032 |
+| Q50 | 451 | 16.2 | 433 | 262 |
+| Q100 | 2,252 | 43.2 | 1,575 | 1,623 |
+| **Exposed, defences holding** | **5,421** | **108.6** | **4,709** | **3,716** |
+| Residual: behind the defences only | 4,610 | 181.4 | n/a | 4,058 |
+
+Districts ranked by exposed footprint (defences holding):
+
+| Rank | District | Exposed footprint (ha) | Share of the district's footprint | Exposed buildings | Rank by count |
+|---:|---|---:|---:|---:|---:|
+| 1 | Praha 16 (Radotín) | 18.8 | 35% | 598 | 2 |
+| 2 | Praha 7 | 14.2 | 12% | 297 | 7 |
+| 3 | Praha 6 | 12.0 | 3% | 492 | 4 |
+| 4 | Praha 4 | 10.2 | 3% | 310 | 6 |
+| 5 | Praha-Zbraslav | 8.4 | 18% | 785 | 1 |
+| 6 | Praha 10 | 7.5 | 2% | 250 | 9 |
+| 7 | Praha-Lipence | 6.9 | 29% | 577 | 3 |
+| 8 | Praha-Velká Chuchle | 5.6 | 25% | 237 | 10 |
+
+Behind the defences, the order changes completely: **Praha 8 (61.2 ha), Praha 1
+(49.5 ha) and Praha 7 (31.7 ha)** hold the most residual-risk footprint. These are the
+central riverside districts, including Karlín (Praha 8), one of the areas worst hit by
+the 2002 flood. 11 of the 57 districts have no exposed buildings at all.
 
 ## What it will do
 
@@ -96,6 +130,26 @@ broadcast and 105-132 s with the RangeJoin: roughly half the time. A RangeJoin i
 when neither side fits in memory, for example all of Europe's buildings against all of
 its flood zones.
 
+### District totals and ranking
+
+`aggregate.py` sums the per-building table by district and by flood class. Districts are
+**ranked by exposed footprint area, not by building count**. A garage and an apartment
+block each count as one building, and many exposed buildings are small:
+
+- Half of the exposed machine-learned footprints are under 30 m².
+- Among exposed OSM buildings, 315 are garages (median 19 m²).
+
+Ranked by count, the top three are Zbraslav, Praha 16 and Lipence, where cottages and
+sheds crowd the floodplain at the Vltava–Berounka confluence. Ranked by area, Praha 7
+and Praha 6 move up and Zbraslav drops to fifth.
+
+The district table also carries:
+- counts under the stricter point rule;
+- counts of buildings of at least 30 m², a judgement-call threshold set in `config.py`;
+- cumulative counts and areas for Q5, Q20 and Q50;
+- a separate ranking for residual risk;
+- the share of each district's exposed buildings that are machine-learned footprints.
+
 ## Known limitations (so far)
 
 - **These are river and small-stream floods, not flash floods from rain.** The zones
@@ -127,6 +181,10 @@ its flood zones.
   machine-learned footprints. Counts and areas measure exposure, not value or loss.
   Height is recorded for only 0.5% of buildings, so volume or floor area cannot be
   estimated reliably; the number of floors is known for 51%.
+- **Exposed buildings lean on machine-learned footprints.** They are 38% of the exposed
+  buildings but only 16% of all buildings, and 80% of the exposed buildings in Praha 8.
+  They are mostly small (median 29 m²) and carry no attributes, so the counts in those
+  districts rest largely on unverified shapes. The district table reports this share.
 - **Inputs can disappear.** Overture keeps only recent releases online, so the extract
   can be rebuilt from source only until release 2026-10-21.0 is deleted. IPR may
   republish its layers at any time. In both cases the SHA-256 pins make the pipeline stop
@@ -232,6 +290,7 @@ src/prague_flood/   the pipeline package
   load.py           every layer into Sedona: English columns, decoded codes, EPSG:32633
   hazard.py         one hazard-zone table, cut into pieces of at most 256 vertices
   join.py           buildings to districts and hazard zones: one row per building
+  aggregate.py      district and flood-class totals, ranked by exposed footprint area
   overture.py       DuckDB extract of Prague's buildings from Overture on S3
   session.py        local Spark session with Sedona registered
 tests/              pytest suite (markers: `spark` needs Java, `data` needs data/raw)

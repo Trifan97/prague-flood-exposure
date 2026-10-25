@@ -4,12 +4,8 @@ The inputs are pinned by SHA-256, so the counts here are exact: a change means t
 method changed, which should be a deliberate decision.
 """
 
-from collections.abc import Iterator
-
 import pytest
 from pyspark.sql import DataFrame, SparkSession
-
-from prague_flood import join
 
 pytestmark = [pytest.mark.data, pytest.mark.spark]
 
@@ -26,15 +22,10 @@ EXPECTED_CLASSES = {
 }
 
 
-@pytest.fixture(scope="module")
-def table(layers: dict[str, DataFrame]) -> Iterator[DataFrame]:
-    df = join.exposure(layers["buildings"], layers["districts"], layers["hazard_zones"]).cache()
-    df.createOrReplaceTempView("exposure")
-    # Fill the cache with a query that reads every column. A bare count() would not: Spark
-    # sees that it needs nothing from the hazard side of the left join and skips that join.
-    df.groupBy("exposure_class").count().collect()
-    yield df
-    df.unpersist()
+@pytest.fixture
+def table(exposure_table: DataFrame) -> DataFrame:
+    # Built and cached once per test run by conftest.py, which registers the `exposure` view.
+    return exposure_table
 
 
 def counts(spark: SparkSession, sql: str) -> dict[str, int]:

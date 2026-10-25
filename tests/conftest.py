@@ -5,7 +5,7 @@ from collections.abc import Iterator
 import pytest
 from pyspark.sql import DataFrame, SparkSession
 
-from prague_flood import config, hazard, load
+from prague_flood import config, hazard, join, load
 from prague_flood.session import local_session
 
 
@@ -53,3 +53,15 @@ def layers(spark: SparkSession, raw_data: None) -> Iterator[dict[str, DataFrame]
     yield loaded
     for df in loaded.values():
         df.unpersist()
+
+
+@pytest.fixture(scope="session")
+def exposure_table(layers: dict[str, DataFrame]) -> Iterator[DataFrame]:
+    """join.exposure() on the real city, cached and registered as the `exposure` view."""
+    df = join.exposure(layers["buildings"], layers["districts"], layers["hazard_zones"]).cache()
+    df.createOrReplaceTempView("exposure")
+    # Fill the cache with a query that needs every column. A bare count() would not: Spark
+    # sees that it needs nothing from the hazard side of the left join and skips that join.
+    df.groupBy("exposure_class").count().collect()
+    yield df
+    df.unpersist()

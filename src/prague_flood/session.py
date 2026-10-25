@@ -18,13 +18,19 @@ from prague_flood.download import fetch
 
 
 def local_session(
-    master: str = "local[*]", app_name: str = "prague-flood", driver_memory: str = "3g"
+    master: str = "local[*]",
+    app_name: str = "prague-flood",
+    driver_memory: str = "3g",
+    shuffle_partitions: int = 16,
 ) -> SparkSession:
     """Start, or reuse, a local Spark session with Sedona registered.
 
     ``master`` sets the number of cores: ``local[*]`` uses all of them, ``local[2]`` two.
     ``driver_memory`` is the JVM heap. In local mode the driver also does the executors'
     work, and Spark's 1 GB default makes cached data spill to disk.
+    ``shuffle_partitions`` is how many tasks every groupBy, join or window shuffle
+    creates. Spark's default of 200 is sized for clusters; on one machine it means
+    hundreds of near-empty tasks per shuffle.
     """
     if "JAVA_HOME" not in os.environ:
         raise RuntimeError(
@@ -50,6 +56,7 @@ def local_session(
         .appName(app_name)
         .config("spark.driver.extraClassPath", classpath)
         .config("spark.driver.memory", driver_memory)
+        .config("spark.sql.shuffle.partitions", str(shuffle_partitions))
         .config("spark.local.dir", str(config.SPARK_CACHE_DIR / "tmp"))
         # Fixed time zone, so timestamps do not depend on the machine running the code.
         .config("spark.sql.session.timeZone", "UTC")

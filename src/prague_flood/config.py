@@ -129,6 +129,13 @@ VLTAVA_CATEGORIES: Final = {
 # enough for tight bounding boxes, large enough to keep the number of pieces modest.
 MAX_VERTICES: Final = 256
 
+# Buildings smaller than this are mostly garages, sheds and garden cabins: among exposed
+# buildings, OSM garages have a median footprint of 19 m², and half of the exposed
+# machine-learned footprints are under 30 m². The district table also counts exposed
+# buildings of at least this size, as a sensitivity check on the raw counts. The value
+# is a judgement call, not a standard.
+MIN_BUILDING_M2: Final = 30
+
 # Overture Maps buildings (ODbL). Overture keeps only recent releases on S3, so this one
 # will eventually be deleted. The SHA-256 still identifies the exact extract used.
 OVERTURE_RELEASE: Final = "2026-10-21.0"
