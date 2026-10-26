@@ -235,8 +235,16 @@ files are never edited; all cleaning happens in code.
 | `ipr_vltava_categories.geojson` | 231 Vltava/Berounka zone polygons by category; `kateg` 4 = designated for protection by the city's flood defences | IPR Praha | CC BY 4.0 |
 | `ipr_districts.geojson` | The 57 city districts (*městské části*) | IPR Praha | CC BY 4.0 |
 | `overture_buildings_prague_2026-10-21.0.parquet` | 306,290 building footprints whose bounding boxes overlap Prague's, as GeoParquet, cut from [Overture Maps](https://overturemaps.org/) release 2026-10-21.0 with DuckDB | Overture Maps | ODbL |
+| `ipr_*.parquet` (7 files) | GeoParquet copies of the IPR layers, made by `convert.py` with DuckDB. **These, not the GeoJSON, are what Spark reads.** | derived | as their sources |
 
-The IPR files are GeoJSON in WGS84, exactly as the portal exports them. Overture's
+The IPR files are GeoJSON in WGS84, exactly as the portal exports them, and are never
+edited. Spark does not read them, though. On Wherobots, Sedona's GeoJSON reader failed
+on every IPR layer, Comet acceleration on or off. Their polygons, up to 105,000 vertices,
+become JSON text several megabytes long, and the reader hit a zero byte just past the
+16 KiB mark (column 16,386). The same files read fine locally, and the GeoParquet
+buildings file read fine on Wherobots. So the download stage converts each layer once
+to GeoParquet (11 MB in total, against 40 MB of GeoJSON) and pins the copies by
+SHA-256; converting twice gives identical bytes. Overture's
 buildings cover the planet, so `overture.py` reads only the parts of the S3 files whose
 bounding-box statistics overlap Prague. That takes about 6 minutes. The extract is
 sorted by building id, so rerunning it produces the same bytes; that was checked by
@@ -318,10 +326,11 @@ Tests marked `data` check the files in `data/raw` and are skipped, with the reas
 printed, until the download has run.
 
 To run the same pipeline on Wherobots, follow [`docs/wherobots.md`](docs/wherobots.md):
-upload the inputs to Wherobots Managed Storage, put the notebook and the zipped committed
-package in My Files, and run
-[`notebooks/wherobots_run.ipynb`](notebooks/wherobots_run.ipynb). The notebook checks
-that the inputs match the pinned SHA-256 values and that the results equal the local run.
+upload the notebook, the zipped committed package and the 8 GeoParquet inputs to My Files,
+and run [`notebooks/wherobots_run.ipynb`](notebooks/wherobots_run.ipynb). The notebook
+copies the inputs to S3 for the workers, checks them against the pinned SHA-256 values,
+and checks that the results equal the local run. It is built from
+[`scripts/build_notebook.py`](scripts/build_notebook.py); edit that, not the `.ipynb`.
 
 `requirements.txt` pins the exact versions that were tested. `--no-deps` stops pip from
 re-resolving them. The first Spark run downloads the Sedona jars (about 110 MB) into
@@ -339,6 +348,7 @@ requirements.txt    exact tested versions (pip freeze)
 scripts/
   dev_env.ps1       points this PowerShell window at the project's JDK and venv
   package_for_wherobots.py   zips the committed package for Wherobots (git archive)
+  build_notebook.py          builds notebooks/wherobots_run.ipynb from plain Python
 benchmarks/
   geopandas_baseline.py      the same analysis in GeoPandas: timing and cross-check
 notebooks/
@@ -347,6 +357,8 @@ src/prague_flood/   the pipeline package
   __main__.py       command line: python -m prague_flood download
   config.py         paths, CRSs, pinned inputs (URL + SHA-256)
   download.py       checksum-verified downloads of the IPR layers
+  convert.py        IPR GeoJSON to pinned GeoParquet copies (what Spark reads)
+  duck.py           the DuckDB connection used by convert.py and overture.py
   load.py           every layer into Sedona: English columns, decoded codes, EPSG:32633
   hazard.py         one hazard-zone table, cut into pieces of at most 256 vertices
   join.py           buildings to districts and hazard zones: one row per building

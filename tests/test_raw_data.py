@@ -37,6 +37,12 @@ def test_ipr_layer_is_unchanged(name: str) -> None:
     assert sha256_of(require(config.RAW_DIR / source.filename)) == source.sha256
 
 
+@pytest.mark.parametrize("name", sorted(config.IPR_GEOPARQUET))
+def test_ipr_geoparquet_copy_is_unchanged(name: str) -> None:
+    derived = config.IPR_GEOPARQUET[name]
+    assert sha256_of(require(config.RAW_DIR / derived.filename)) == derived.sha256
+
+
 def test_buildings_extract_is_unchanged() -> None:
     path = require(config.RAW_DIR / config.BUILDINGS_FILENAME)
     assert sha256_of(path) == config.BUILDINGS_SHA256

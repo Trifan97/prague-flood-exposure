@@ -12,27 +12,10 @@ buildings are really inside Prague, and in which district, is left to the Sedona
 
 from pathlib import Path
 
-import duckdb
-
 from prague_flood import config
 from prague_flood.config import BBox
 from prague_flood.download import is_verified, promote
-
-
-def _quoted(text: str) -> str:
-    """A SQL string literal (single quotes doubled)."""
-    return "'" + text.replace("'", "''") + "'"
-
-
-def connect() -> duckdb.DuckDBPyConnection:
-    """An in-memory DuckDB with spatial support and anonymous access to Overture's bucket."""
-    con = duckdb.connect()
-    con.execute(f"SET extension_directory = {_quoted(config.DUCKDB_EXTENSIONS_DIR.as_posix())}")
-    for extension in ("spatial", "httpfs"):
-        con.install_extension(extension)
-        con.load_extension(extension)
-    con.execute("SET s3_region = 'us-west-2'")
-    return con
+from prague_flood.duck import connect, quoted
 
 
 def write_buildings(source: str, bbox: BBox, path: Path) -> None:
@@ -51,11 +34,11 @@ def write_buildings(source: str, bbox: BBox, path: Path) -> None:
                 height,
                 num_floors,
                 geometry
-            FROM read_parquet({_quoted(source)})
+            FROM read_parquet({quoted(source)})
             WHERE bbox.xmin <= {bbox.xmax} AND bbox.xmax >= {bbox.xmin}
               AND bbox.ymin <= {bbox.ymax} AND bbox.ymax >= {bbox.ymin}
             ORDER BY id
-        ) TO {_quoted(path.as_posix())} (FORMAT parquet, COMPRESSION zstd)
+        ) TO {quoted(path.as_posix())} (FORMAT parquet, COMPRESSION zstd)
     """)
     con.close()
 

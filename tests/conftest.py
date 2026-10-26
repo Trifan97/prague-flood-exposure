@@ -12,8 +12,10 @@ from prague_flood.session import local_session
 @pytest.fixture(scope="session")
 def spark() -> Iterator[SparkSession]:
     # One session for the whole test run: starting the JVM takes seconds, so starting
-    # one per test would dominate the run time. Two cores keep the tests light.
-    session = local_session(master="local[2]", app_name="prague-flood-tests")
+    # one per test would dominate the run time. Two cores keep the tests light. 4 GB, not
+    # the pipeline's 3: this session holds every data test's cached tables at once, and
+    # with 3 GB the end-to-end export test once lost a large result to memory pressure.
+    session = local_session(master="local[2]", app_name="prague-flood-tests", driver_memory="4g")
     yield session
     session.stop()
 
@@ -21,9 +23,8 @@ def spark() -> Iterator[SparkSession]:
 @pytest.fixture(scope="session")
 def raw_data() -> None:
     """Skip, with the reason printed, unless every input is in data/raw."""
-    paths = [config.RAW_DIR / s.filename for s in config.IPR_LAYERS.values()]
-    paths.append(config.RAW_DIR / config.BUILDINGS_FILENAME)
-    missing = [p.name for p in paths if not p.exists()]
+    names = [s.filename for s in config.IPR_LAYERS.values()] + list(config.SPARK_INPUTS)
+    missing = [name for name in names if not (config.RAW_DIR / name).exists()]
     if missing:
         pytest.skip(f"not downloaded: {missing}; run: python -m prague_flood download")
 

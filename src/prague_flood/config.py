@@ -19,6 +19,14 @@ class Source:
 
 
 @dataclass(frozen=True)
+class Derived:
+    """A file the pipeline makes from downloaded ones, pinned to the exact bytes it wrote."""
+
+    filename: str
+    sha256: str
+
+
+@dataclass(frozen=True)
 class BBox:
     """A bounding box in WGS84 longitude/latitude degrees."""
 
@@ -100,6 +108,40 @@ IPR_LAYERS: Final = {
     ),
 }
 
+# The IPR layers converted to GeoParquet (convert.py): what Spark actually reads. Like the
+# Overture extract, their bytes also depend on the DuckDB version in requirements.txt.
+# Converting twice gave identical bytes for every layer.
+IPR_GEOPARQUET: Final = {
+    "vltava_q5": Derived(
+        "ipr_vltava_q5.parquet",
+        "6df034997e50ffd4feeb8a55055e894262b261b9a6098b2284198cd86f07fa00",
+    ),
+    "vltava_q20": Derived(
+        "ipr_vltava_q20.parquet",
+        "4c0d4fa33db8d9459ef200d65e071a685731b7d2438462b10ef5e1245b14cdff",
+    ),
+    "vltava_q50": Derived(
+        "ipr_vltava_q50.parquet",
+        "7fdfd652b3662d95dc6e0511cf7e2f641923060bf9b6f3560883e9c83631be37",
+    ),
+    "vltava_q100": Derived(
+        "ipr_vltava_q100.parquet",
+        "014aee0c21d2f103b75164f97bd34d4bbffd1cf9a5ae8d46eddb35066ab0b666",
+    ),
+    "small_streams": Derived(
+        "ipr_small_streams.parquet",
+        "efc41862e833530932889dde8266b2970310e74b9472de94cf19622ed822296b",
+    ),
+    "vltava_categories": Derived(
+        "ipr_vltava_categories.parquet",
+        "502ad7bf987d7c46fe450b14edc0ec1db148a3dca51d9efc5e5ee149366d51f0",
+    ),
+    "districts": Derived(
+        "ipr_districts.parquet",
+        "44d07f025294d6097d38f22a886b4d93fd0234478eae07bf2b171fd203afc23a",
+    ),
+}
+
 # Return period, in years, of each Vltava flood-extent layer.
 VLTAVA_RETURN_PERIODS: Final = {
     "vltava_q5": 5,
@@ -151,6 +193,12 @@ BUILDINGS_FILENAME: Final = f"overture_buildings_prague_{OVERTURE_RELEASE}.parqu
 # The extract is written by our own query, so its bytes also depend on the DuckDB version
 # pinned in requirements.txt.
 BUILDINGS_SHA256: Final = "7e6204fec0162fbca0631773da05feba71781740a351b2b70d9de9c9d60cec68"
+
+# Every file Spark reads, by name, with its pinned SHA-256: the 7 IPR layers as GeoParquet
+# and the buildings. On Wherobots these are the files that must be in the input folder.
+SPARK_INPUTS: Final = {d.filename: d.sha256 for d in IPR_GEOPARQUET.values()} | {
+    BUILDINGS_FILENAME: BUILDINGS_SHA256
+}
 
 # --- Outputs (GeoParquet in WGS84, for CARTO) ---
 OUTPUTS: Final = {

@@ -7,7 +7,8 @@ import pytest
 from pyspark.sql import DataFrame, SparkSession
 
 from prague_flood import config
-from prague_flood.load import decode, read_geojson, to_target_crs
+from prague_flood.convert import write_geoparquet
+from prague_flood.load import decode, read_layer, to_target_crs
 
 pytestmark = pytest.mark.spark
 
@@ -71,19 +72,21 @@ def test_decode_maps_known_codes_and_nulls_unknown_ones(spark: SparkSession) -> 
     assert labels == ["a", "b", None]
 
 
-def test_read_geojson_gives_one_row_per_feature(spark: SparkSession, tmp_path: Path) -> None:
+def test_read_layer_reads_the_geoparquet_copy(spark: SparkSession, tmp_path: Path) -> None:
+    # GeoJSON -> GeoParquet with convert.py, then read back by Sedona: the path the
+    # pipeline takes for every IPR layer.
     features = [
         {
             "type": "Feature",
-            "properties": {"kateg": code},
+            "properties": {"objectid": oid, "kateg": code},
             "geometry": {"type": "Point", "coordinates": [14.4, 50.1]},
         }
-        for code in (1, 2)
+        for oid, code in ((2, 1), (1, 2))
     ]
-    path = tmp_path / "layer.geojson"
-    # indent=2 spreads the collection over many lines, like the IPR files.
-    path.write_text(json.dumps({"type": "FeatureCollection", "features": features}, indent=2))
+    source = tmp_path / "layer.geojson"
+    source.write_text(json.dumps({"type": "FeatureCollection", "features": features}))
+    write_geoparquet(source, tmp_path / config.IPR_GEOPARQUET["small_streams"].filename)
 
-    df = read_geojson(spark, path)
-    assert df.columns == ["geometry", "kateg"]
-    assert sorted(row["kateg"] for row in df.collect()) == [1, 2]
+    df = read_layer(spark, "small_streams", tmp_path.as_posix())
+    assert set(df.columns) == {"objectid", "kateg", "geometry"}
+    assert sorted((row["objectid"], row["kateg"]) for row in df.collect()) == [(1, 2), (2, 1)]

@@ -8,12 +8,14 @@ Wherobots.
 import argparse
 
 from prague_flood import config
+from prague_flood.convert import convert_ipr
 from prague_flood.download import download_ipr, is_verified
 from prague_flood.overture import extract_buildings
 
 
 def download() -> None:
-    for name, path in download_ipr().items():
+    # The GeoJSON as published, then the GeoParquet copies Spark reads (see convert.py).
+    for name, path in convert_ipr(download_ipr()).items():
         print(f"{name:<18} {path}")
     dest = config.RAW_DIR / config.BUILDINGS_FILENAME
     if not is_verified(dest, config.BUILDINGS_SHA256):

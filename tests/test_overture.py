@@ -11,7 +11,8 @@ import pytest
 
 from prague_flood.config import BBox
 from prague_flood.download import ChecksumError, sha256_of
-from prague_flood.overture import connect, extract_buildings, write_buildings
+from prague_flood.duck import connect
+from prague_flood.overture import extract_buildings, write_buildings
 
 PRAGUE = BBox(xmin=14.22, ymin=49.94, xmax=14.71, ymax=50.18)
 
