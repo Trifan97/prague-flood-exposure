@@ -227,17 +227,18 @@ SEDONA_VERSION: Final = "1.9.1"
 SPARK_CACHE_DIR: Final = PROJECT_ROOT / ".spark"
 JARS_DIR: Final = SPARK_CACHE_DIR / "jars"
 
-# The Sedona build for Spark 4.0 / Scala 2.13, and the GeoTools bundle that holds the
-# EPSG definitions ST_Transform needs. Both come from Maven Central; the SHA-256 values
-# were computed after checking Maven's published SHA-1 for each jar.
+# The Sedona build for Spark 4.1 / Scala 2.13 (Wherobots runs Spark 4.1.3), and the
+# GeoTools bundle that holds the EPSG definitions ST_Transform needs. Both come from Maven
+# Central; the SHA-256 values were computed after checking Maven's published SHA-1.
 _MAVEN: Final = "https://repo1.maven.org/maven2"
-_SEDONA_JAR: Final = f"sedona-spark-shaded-4.0_2.13-{SEDONA_VERSION}.jar"
+_SEDONA_ARTIFACT: Final = "sedona-spark-shaded-4.1_2.13"
+_SEDONA_JAR: Final = f"{_SEDONA_ARTIFACT}-{SEDONA_VERSION}.jar"
 _GEOTOOLS_JAR: Final = f"geotools-wrapper-{SEDONA_VERSION}-33.5.jar"
 SEDONA_JARS: Final = (
     Source(
-        url=f"{_MAVEN}/org/apache/sedona/sedona-spark-shaded-4.0_2.13/{SEDONA_VERSION}/{_SEDONA_JAR}",
+        url=f"{_MAVEN}/org/apache/sedona/{_SEDONA_ARTIFACT}/{SEDONA_VERSION}/{_SEDONA_JAR}",
         filename=_SEDONA_JAR,
-        sha256="144773ebb9b1b8f2754ed487f9a37b1f282ae25e607245e50237c0f0cae1d477",
+        sha256="dcbb4484a51af2a1eaf30848e58991df13202e62507a6e8eedd31309fb1bba40",
     ),
     Source(
         url=f"{_MAVEN}/org/datasyslab/geotools-wrapper/{SEDONA_VERSION}-33.5/{_GEOTOOLS_JAR}",

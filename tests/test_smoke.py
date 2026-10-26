@@ -22,9 +22,9 @@ def test_data_dirs_are_separate_and_inside_the_repo() -> None:
 
 
 def test_pyspark_matches_wherobots_runtime() -> None:
-    # Wherobots v2 runs Spark 4.0. On another minor version, code can pass here and
-    # fail on the cluster.
-    assert version("pyspark").startswith("4.0.")
+    # The Wherobots runtime the pipeline ran on reported Spark 4.1.3. On another minor
+    # version, code can pass here and fail on the cluster.
+    assert version("pyspark").startswith("4.1.")
 
 
 def test_sedona_python_matches_sedona_jars() -> None:

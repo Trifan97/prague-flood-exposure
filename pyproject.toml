@@ -11,8 +11,9 @@ license = "MIT"
 authors = [{ name = "Tudor Trifan" }]
 requires-python = ">=3.11"
 # Loose ranges: what the code needs. Exact tested versions live in requirements.txt.
-# pyspark stays on 4.0.x because the Wherobots v2 runtime is Spark 4.0: code written
-# against a newer Spark locally could call APIs the cluster does not have.
+# pyspark stays on 4.1.x because the Wherobots runtime the pipeline ran on is Spark 4.1.3
+# (its release notes said 4.0; the runtime itself reported 4.1.3). Developing against
+# another minor version risks code that passes here and fails on the cluster.
 dependencies = [
     "apache-sedona>=1.9,<1.10",
     # Cuts the Prague buildings out of Overture's GeoParquet on S3 (download stage only).
@@ -20,10 +21,11 @@ dependencies = [
     # Writes the small result tables as GeoParquet (export.py); needs pyarrow for Parquet.
     "geopandas>=1.0",
     # sedona.spark imports pandas on start-up, but apache-sedona does not declare it.
-    # Below 3: PySpark 4.0 predates pandas 3 and still uses arguments pandas 3 deprecates.
+    # Below 3, like the Wherobots runtime (pandas 2.2); under pandas 3, PySpark 4.0 warned
+    # about arguments pandas 3 deprecates.
     "pandas>=2.2,<3",
     "pyarrow>=15",
-    "pyspark>=4.0,<4.1",
+    "pyspark>=4.1,<4.2",
 ]
 
 [project.optional-dependencies]

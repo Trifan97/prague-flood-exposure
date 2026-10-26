@@ -21,7 +21,7 @@ pyarrow==26.0.0
 Pygments==2.21.0
 pyogrio==0.13.0
 pyproj==3.7.2
-pyspark==4.0.4
+pyspark==4.1.3
 pytest==9.1.1
 python-dateutil==3.0.0
 pytz==2026.5

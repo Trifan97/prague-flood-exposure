@@ -1,8 +1,8 @@
 # Prague flood exposure: a distributed spatial join in Apache Sedona
 
-> **Status: work in progress (step 7 of 8: the Wherobots run is prepared, not yet run).**
-> The results below come from a local run and are confirmed by an independent GeoPandas
-> implementation.
+> **Reproduced three ways, with identical results:** locally in Apache Sedona, on a
+> Wherobots cluster (every one of the 163,092 output cells identical), and by an
+> independent GeoPandas implementation (every building classified the same).
 
 Which Prague buildings sit inside official flood zones, and which of the city's 57
 districts (*městské části*) have the most exposed building stock? The pipeline answers
@@ -10,7 +10,7 @@ that with a distributed spatial join in [Apache Sedona](https://sedona.apache.or
 on [Wherobots](https://wherobots.com/), and exports one clean GeoParquet table for a
 CARTO map.
 
-## Results so far
+## Results
 
 Of Prague's 208,621 buildings, **5,421 (2.6%) touch an official river or small-stream
 flood zone** while the flood defences hold. That is 108.6 ha of building footprint.
@@ -45,7 +45,7 @@ Behind the defences, the order changes completely: **Praha 8 (61.2 ha), Praha 1
 central riverside districts, including Karlín (Praha 8), one of the areas worst hit by
 the 2002 flood. 11 of the 57 districts have no exposed buildings at all.
 
-## What it will do
+## What it does
 
 1. Load the official IPR Praha flood zones, Overture building footprints and the
    57 district polygons.
@@ -125,11 +125,13 @@ the unsplit one never finished; the area test is what shows the split loses noth
 they are *broadcast*: every worker gets a copy with an R-tree index (Sedona's
 `BroadcastIndexJoin`), and the 300,000 buildings never move between workers. The
 alternative, Sedona's `RangeJoin`, partitions both sides by space and shuffles them.
-Both give identical results (checked in a unit test and on the full city). On the
-development laptop (4 cores, two runs each), the whole exposure step took 57-63 s
-broadcast and 105-132 s with the RangeJoin: roughly half the time. A RangeJoin is for
-when neither side fits in memory, for example all of Europe's buildings against all of
-its flood zones.
+Both give identical results (checked in a unit test, on the full city, and on
+Wherobots). On the development laptop (4 cores, second runs), the whole exposure step
+took 7.2 s broadcast and 14.7 s with the RangeJoin: about half the time. On the
+Wherobots cluster the two were level (4.0 s and 3.5 s). There, the buildings are already
+spread across workers, so partitioning them by space costs about as much as copying the
+zones to every worker. A RangeJoin is for when neither side fits in memory, for example
+all of Europe's buildings against all of its flood zones.
 
 ### District totals and ranking
 
@@ -159,14 +161,18 @@ baseline, and an independent check. GeoPandas computes on GEOS and Sedona on JTS
 two classify **all 10,031 exposed and residual buildings identically, with no
 differences**, under both exposure rules.
 
-Timings on the development laptop:
+Timings, all on the current code and inputs:
 
-| Engine | Flood zones | Building-to-zone join | Total |
-|---|---|---:|---:|
-| GeoPandas, 1 core | whole (2,229) | 620 s, plus 123 s for the point rule | 759 s (read to classified) |
-| GeoPandas, 1 core | split, at most 256 vertices (7,065 pieces) | 1.3 s, plus 0.2 s | **19 s** (read to classified) |
-| Sedona, local Spark, 4 cores | split (7,940 pieces) | whole exposure step 35-60 s | 127 s (full pipeline, including totals and export) |
-| Sedona, Wherobots | split | *pending* | *pending* |
+| Engine | Machine | Flood zones | Join | End to end |
+|---|---|---|---:|---:|
+| GeoPandas | laptop, 1 core | whole (2,229) | 620 s, plus 123 s for the point rule | 759 s, read to classified |
+| GeoPandas | laptop, 1 core | split, at most 256 vertices (7,065 pieces) | 1.3 s, plus 0.2 s | **19 s**, read to classified |
+| Apache Sedona 1.9.1, Spark 4.1.3 | laptop, 4 cores | split (7,940 pieces) | 7.2 s broadcast, 14.7 s RangeJoin | 56 s, full pipeline (JVM start, totals, export) |
+| WherobotsDB, Spark 4.1.3 | Wherobots, 12 cores | split (7,940 pieces) | 4.0 s broadcast, 3.5 s RangeJoin | 41 s: 26 s load and prepare, 15 s join, totals and export |
+
+The Sedona join times are the second of two runs, and cover the whole exposure step:
+districts, the hazard join and the grouping by class. Loading and preparing the inputs
+took the same on both Sedona machines (26.8 s on the laptop, 26.4 s on Wherobots).
 
 What this shows:
 
@@ -175,11 +181,45 @@ What this shows:
   between processes) outweigh the actual work.
 - **The big win came from splitting the polygons, not from the engine.** Splitting made
   the join about 40 times faster in GeoPandas and at least 60 times faster in Sedona.
+- **The cluster sped up the join, not the whole run.** Wherobots joined about twice as
+  fast as the laptop's Spark, but most of the run is loading and preparing data, which
+  took the same 26 seconds on both.
 - **What Sedona adds is headroom.** The same code, unchanged, partitions the work across
   a cluster when the data no longer fits on one machine, for example every building in a
   country against its national flood zones. At Prague's size that headroom is unused.
 
-## Known limitations (so far)
+## Running on Wherobots
+
+The same committed code ran on a Wherobots runtime on 26 October 2026, from
+[`notebooks/wherobots_run.ipynb`](notebooks/wherobots_run.ipynb). The executed copy,
+with its printed output, is
+[`notebooks/wherobots_run_2026-10-26.ipynb`](notebooks/wherobots_run_2026-10-26.ipynb);
+only the storage path is redacted.
+
+- **The runtime:** Python 3.12.3 and Spark 4.1.3, with WherobotsDB (Wherobots' own
+  Sedona build) running a native acceleration engine and Comet. Spark reported 12 cores.
+- **The inputs:** all 8 were checked against their pinned SHA-256 values on the workers.
+- **The results:** every class count matched the local run under both join strategies.
+  The three output files are identical, cell by cell, to a local run on Spark 4.1.3:
+  163,092 cells, checked with
+  [`scripts/compare_outputs.py`](scripts/compare_outputs.py).
+
+What the first attempts ran into, all now handled in the code or the guide:
+
+- **Wherobots' GeoJSON reader failed on the IPR layers.** It hit a zero byte just past
+  the 16 KiB mark inside geometries several megabytes long, whether or not Comet was
+  enabled. The same files read fine locally. Spark now reads GeoParquet copies only (see
+  Data).
+- **The runtime's Spark version differed from the release notes:** they described 4.0,
+  and the runtime reported 4.1.3. The local pin moved to 4.1.3 to match, and every test
+  still passes with the same pinned counts.
+- **The Storage page's web upload silently skipped the 39.7 MB buildings file.** The
+  notebook now copies all inputs from My Files to S3 itself.
+- **Wherobots defaults to 1,500 shuffle partitions.** That is far more than this data
+  needs (locally the pipeline uses 16), but its adaptive execution coped, and the run was
+  measured with the defaults untouched.
+
+## Known limitations
 
 - **These are river and small-stream floods, not flash floods from rain.** The zones
   are design floods on the Vltava and Berounka (Q5 to Q100) and Q100 zones on small
@@ -194,7 +234,7 @@ What this shows:
 - **Flood defences are assumed to hold.** Central Prague is protected by permanent and
   mobile barriers, and IPR draws the Q-zones with them in place: only about 1% of the
   area the city protects lies inside the Q100 extent. The exposure counts are therefore
-  for the case where the defences hold. Buildings behind the defences will be reported
+  for the case where the defences hold. Buildings behind the defences are reported
   separately as residual risk (flooded only if the defences fail), using IPR's 2014
   categorised layer. That older layer does not cover 1.6 km² of the 2021 Q100 extent.
 - **Some source polygons are repaired.** 14 IPR polygons, including the only polygon
@@ -270,12 +310,16 @@ GeoPandas), a second CRS library, and gets Prague's ~496 km² again.
 
 ## Environment
 
-The local environment copies the Wherobots v2 runtime, so code tested here runs there:
+The local environment copies the Wherobots runtime the pipeline ran on, so code tested
+here runs there:
 
-- **Spark 4.0** (`pyspark` 4.0.x) with **Apache Sedona 1.9**.
+- **Spark 4.1** (`pyspark` 4.1.3, as the runtime reported; Wherobots' release notes said
+  4.0) with **Apache Sedona 1.9**. Wherobots runs its own Sedona build (WherobotsDB),
+  with a native acceleration engine and Comet, so the two are close but not identical.
 - **Java 17.** Spark runs on the JVM, so local runs and the Sedona tests need it.
-- **Python 3.11.** Spark's Python support trails new Python releases, and 3.11 is
-  supported by every Spark 4.0 build.
+- **Python 3.11 locally, 3.12 on Wherobots.** The pipeline has no Python UDFs (all the
+  work runs as Spark SQL and Sedona functions in the JVM), so the Python version only
+  affects the driver code, and the identical outputs show it made no difference.
 
 ### Java
 
@@ -316,9 +360,9 @@ python -m pip install -e . --no-deps
 # Install Java (see above), then in every new window:
 . .\scripts\dev_env.ps1
 python -m prague_flood download   # ~80 MB of inputs into data/raw (about 7 minutes)
-python -m prague_flood run        # the Sedona pipeline; GeoParquet into data/processed (~2 min)
+python -m prague_flood run        # the Sedona pipeline; GeoParquet into data/processed (~1 min)
 python benchmarks/geopandas_baseline.py   # the same analysis in GeoPandas, compared (~20 s)
-pytest                            # everything, including Spark and data tests (~5 min)
+pytest                            # everything, including Spark and data tests (~3 min)
 pytest -m "not spark"             # fast tests only, no JVM
 ```
 
@@ -336,44 +380,54 @@ and checks that the results equal the local run. It is built from
 re-resolving them. The first Spark run downloads the Sedona jars (about 110 MB) into
 `.spark/jars`.
 
-PySpark is published only as a 434 MB source archive, so pip builds the wheel locally in
+PySpark is published only as a 456 MB source archive, so pip builds the wheel locally in
 the temp folder. If the system drive is nearly full, point the temp folder at another
 drive for that one install, for example `$env:TMP = "F:\pip-tmp"; $env:TEMP = $env:TMP`.
 
 ## Repository layout
 
 ```
-pyproject.toml      package metadata, loose dependency ranges, pytest/ruff/mypy settings
-requirements.txt    exact tested versions (pip freeze)
-scripts/
-  dev_env.ps1       points this PowerShell window at the project's JDK and venv
-  package_for_wherobots.py   zips the committed package for Wherobots (git archive)
-  build_notebook.py          builds notebooks/wherobots_run.ipynb from plain Python
+pyproject.toml        package metadata, loose dependency ranges, pytest/ruff/mypy settings
+requirements.txt      exact tested versions (pip freeze)
+src/prague_flood/     the pipeline package
+  __main__.py         command line: python -m prague_flood download | run
+  config.py           paths, CRSs, pinned inputs and copies (SHA-256), outputs
+  download.py         checksum-verified downloads of the IPR layers
+  convert.py          IPR GeoJSON to pinned GeoParquet copies (what Spark reads)
+  overture.py         DuckDB extract of Prague's buildings from Overture on S3
+  duck.py             the DuckDB connection used by convert.py and overture.py
+  session.py          local Spark session with Sedona registered
+  load.py             every layer into Sedona: English columns, decoded codes, EPSG:32633
+  hazard.py           one hazard-zone table, cut into pieces of at most 256 vertices
+  join.py             buildings to districts and hazard zones: one row per building
+  aggregate.py        district and flood-class totals, ranked by exposed footprint area
+  export.py           small results to GeoParquet in WGS84, via GeoPandas
+  pipeline.py         the whole analysis: python -m prague_flood run
+tests/                pytest suite (markers: `spark` needs Java, `data` needs data/raw)
 benchmarks/
   geopandas_baseline.py      the same analysis in GeoPandas: timing and cross-check
 notebooks/
-  wherobots_run.ipynb        the cloud run: input check, timed joins, full pipeline
-src/prague_flood/   the pipeline package
-  __main__.py       command line: python -m prague_flood download
-  config.py         paths, CRSs, pinned inputs (URL + SHA-256)
-  download.py       checksum-verified downloads of the IPR layers
-  convert.py        IPR GeoJSON to pinned GeoParquet copies (what Spark reads)
-  duck.py           the DuckDB connection used by convert.py and overture.py
-  load.py           every layer into Sedona: English columns, decoded codes, EPSG:32633
-  hazard.py         one hazard-zone table, cut into pieces of at most 256 vertices
-  join.py           buildings to districts and hazard zones: one row per building
-  aggregate.py      district and flood-class totals, ranked by exposed footprint area
-  export.py         small results to GeoParquet in WGS84, via GeoPandas
-  pipeline.py       the whole analysis: python -m prague_flood run
-docs/carto.md       click-by-click CARTO Builder guide
-docs/wherobots.md   set-up and run checklist for Wherobots
-  overture.py       DuckDB extract of Prague's buildings from Overture on S3
-  session.py        local Spark session with Sedona registered
-tests/              pytest suite (markers: `spark` needs Java, `data` needs data/raw)
-data/raw/           downloaded inputs (git-ignored, re-created by the download stage)
-data/processed/     GeoParquet outputs (git-ignored, re-created by the run stage)
+  wherobots_run.ipynb        the cloud run, built by scripts/build_notebook.py
+  wherobots_run_2026-10-26.ipynb   that notebook as run on Wherobots, with its output
+scripts/
+  dev_env.ps1                points this PowerShell window at the project's JDK and venv
+  package_for_wherobots.py   zips the committed package for Wherobots (git archive)
+  build_notebook.py          builds notebooks/wherobots_run.ipynb from plain Python
+  compare_outputs.py         compares two sets of outputs cell by cell
+docs/
+  carto.md            click-by-click CARTO Builder guide
+  wherobots.md        set-up and run checklist for Wherobots
+data/raw/             downloaded inputs (git-ignored, re-created by the download stage)
+data/processed/       GeoParquet outputs (git-ignored, re-created by the run stage)
 ```
 
 ## Licence
 
 Code: MIT (see `LICENSE`). Data keeps its source licence (see the Data table).
+
+## Verdict
+
+**What Sedona did here that a single laptop couldn't: nothing, at Prague's size.**
+GeoPandas on one laptop core classified every building identically in 19 s. What Sedona
+added is that the same tested code ran unchanged on a Wherobots cluster, with identical
+output, and that is what counts once the data no longer fits on one machine.
