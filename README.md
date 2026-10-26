@@ -318,7 +318,8 @@ Tests marked `data` check the files in `data/raw` and are skipped, with the reas
 printed, until the download has run.
 
 To run the same pipeline on Wherobots, follow [`docs/wherobots.md`](docs/wherobots.md):
-zip the committed package, upload it with the inputs to Wherobots storage, and run
+upload the inputs to Wherobots Managed Storage, put the notebook and the zipped committed
+package in My Files, and run
 [`notebooks/wherobots_run.ipynb`](notebooks/wherobots_run.ipynb). The notebook checks
 that the inputs match the pinned SHA-256 values and that the results equal the local run.
 
