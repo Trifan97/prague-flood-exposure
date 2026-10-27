@@ -15,7 +15,9 @@ Two display-only steps keep the maps light without touching the analysis:
 The maps need the optional `keplergl` package: pip install -e .[maps]
 """
 
+import inspect
 from dataclasses import dataclass, field
+from importlib import metadata
 from pathlib import Path
 from typing import Any
 
@@ -102,7 +104,9 @@ def district_table(districts: DataFrame) -> DataFrame:
             "exposed_n_min_size",
             "round(exposed_share_pct, 1) AS exposed_share_pct",
             "round(residual_ha, 2) AS residual_ha",
-            "round(exposed_ml_share_pct, 0) AS exposed_ml_share_pct",
+            # No column that can be empty: older keplergl widgets cannot send the NaN that
+            # an empty number becomes (the machine-learned share is empty for districts
+            # with no exposed buildings, so it is left out).
             "geometry",
         ),
         simplify_m=5.0,
@@ -205,7 +209,23 @@ def layer_config(layer: Layer, categories: list[str]) -> dict[str, Any]:
     }
 
 
-def kepler_config(spec: MapSpec) -> dict[str, Any]:
+def basemap_for(keplergl_version: str) -> str:
+    """The light basemap's name in the kepler.gl that this keplergl package bundles.
+
+    keplergl 0.3.2 bundles kepler.gl 2.5, whose basemaps are Mapbox styles ("light").
+    0.3.4 and later bundle kepler.gl 3, with free basemaps such as "positron". Wherobots
+    ships its own keplergl, older than the 0.4 used locally, so the name is chosen at
+    run time.
+    """
+    numbers = []
+    for part in keplergl_version.split(".")[:3]:
+        if not part.isdigit():
+            break
+        numbers.append(int(part))
+    return "positron" if tuple(numbers) >= (0, 3, 4) else "light"
+
+
+def kepler_config(spec: MapSpec, basemap: str = "positron") -> dict[str, Any]:
     """The whole kepler.gl config for a map whose categories are filled in."""
     return {
         "version": "v1",
@@ -232,7 +252,7 @@ def kepler_config(spec: MapSpec) -> dict[str, Any]:
                 "pitch": 0,
                 "dragRotate": False,
             },
-            "mapStyle": {"styleType": "positron"},
+            "mapStyle": {"styleType": basemap},
         },
     }
 
@@ -306,34 +326,51 @@ def map_specs(exposure: DataFrame, districts: DataFrame, zones: DataFrame) -> di
     }
 
 
+def installed_basemap() -> str:
+    return basemap_for(metadata.version("keplergl"))
+
+
 def build(specs: dict[str, MapSpec], height: int = 650) -> dict[str, Any]:
-    """Render each MapSpec as a kepler.gl map. Returns name -> KeplerGl (shows in Jupyter)."""
+    """Render each MapSpec as a kepler.gl map. Returns name -> KeplerGl (shows in Jupyter).
+
+    SedonaKepler.add_df turns each Sedona DataFrame into a kepler.gl dataset. The map
+    itself is created directly: SedonaKepler.create_map passes arguments that only the
+    newest keplergl accepts, and Wherobots ships an older one.
+    """
+    from keplergl import KeplerGl
     from sedona.spark.maps.SedonaKepler import SedonaKepler
 
+    basemap = installed_basemap()
     maps = {}
     for name, spec in specs.items():
         for dataset, df in spec.datasets.items():
             column = next(lay.color_by for lay in spec.layers if lay.dataset == dataset)
             spec.categories[dataset] = [row[0] for row in df.select(column).distinct().collect()]
-        kepler_map = SedonaKepler.create_map(height=height)
+        kepler_map = KeplerGl(height=height)
         for dataset, df in spec.datasets.items():
             SedonaKepler.add_df(kepler_map, df, name=dataset)
-        kepler_map.config = kepler_config(spec)
+        kepler_map.config = kepler_config(spec, basemap)
         maps[name] = kepler_map
     return maps
 
 
 def save(maps: dict[str, Any], specs: dict[str, MapSpec], folder: Path) -> dict[str, Path]:
-    """Write each map as one standalone HTML file, opening at its configured view."""
+    """Write each map as one standalone HTML file, opening at its configured view.
+
+    The page title (`app_name`) is only passed where the installed keplergl accepts it.
+    """
     folder.mkdir(parents=True, exist_ok=True)
+    basemap = installed_basemap()
     paths = {}
     for name, kepler_map in maps.items():
         path = folder / f"prague_flood_{name}.html"
-        kepler_map.save_to_html(
-            file_name=str(path),
-            config=kepler_config(specs[name]),
-            center_map=False,
-            app_name=specs[name].title,
-        )
+        options = {
+            "file_name": str(path),
+            "config": kepler_config(specs[name], basemap),
+            "center_map": False,
+            "app_name": specs[name].title,
+        }
+        accepted = inspect.signature(kepler_map.save_to_html).parameters
+        kepler_map.save_to_html(**{k: v for k, v in options.items() if k in accepted})
         paths[name] = path
     return paths

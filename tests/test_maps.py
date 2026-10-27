@@ -1,6 +1,7 @@
 """maps.py: legends in flood order, colours matched to categories, tables ready to draw."""
 
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 from pyspark.sql import DataFrame, SparkSession
@@ -12,10 +13,12 @@ from prague_flood.maps import (
     Layer,
     MapSpec,
     View,
+    basemap_for,
     building_table,
     district_table,
     kepler_config,
     layer_config,
+    save,
     sql_text,
     zone_table,
 )
@@ -64,6 +67,39 @@ def test_kepler_config_covers_every_layer_and_its_view() -> None:
 
 def test_sql_text_escapes_quotes() -> None:
     assert sql_text("city's") == "'city''s'"
+
+
+@pytest.mark.parametrize(
+    ("version", "basemap"),
+    [("0.3.2", "light"), ("0.3.7", "positron"), ("0.4.0", "positron"), ("0.4.0rc1", "positron")],
+)
+def test_basemap_matches_the_bundled_kepler_gl(version: str, basemap: str) -> None:
+    # keplergl 0.3.2 bundles kepler.gl 2.5 (Mapbox styles); 0.3.4+ bundle kepler.gl 3.
+    assert basemap_for(version) == basemap
+
+
+def test_save_passes_only_arguments_the_installed_keplergl_accepts(tmp_path: Path) -> None:
+    calls: list[dict[str, object]] = []
+
+    class OldKeplerGl:
+        """save_to_html as in keplergl 0.3.2 and 0.3.7: no app_name (Wherobots' version)."""
+
+        def save_to_html(
+            self,
+            data: object = None,
+            config: object = None,
+            file_name: str = "keplergl_map.html",
+            read_only: bool = False,
+            center_map: bool = False,
+        ) -> None:
+            calls.append({"file_name": file_name, "config": config, "center_map": center_map})
+
+    spec = MapSpec("Title", {}, [], View(14.4, 50.1, 12.0))
+    with patch("prague_flood.maps.installed_basemap", return_value="light"):
+        save({"m": OldKeplerGl()}, {"m": spec}, tmp_path)
+    assert len(calls) == 1
+    assert calls[0]["center_map"] is False
+    assert calls[0]["config"]["config"]["mapStyle"]["styleType"] == "light"  # type: ignore[index]
 
 
 @pytest.mark.spark
