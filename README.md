@@ -47,19 +47,36 @@ the 2002 flood. 11 of the 57 districts have no exposed buildings at all.
 
 ## Maps
 
-Three interactive maps, rendered on Wherobots with SedonaKepler (kepler.gl):
+Three interactive maps, rendered on Wherobots with SedonaKepler (kepler.gl). The
+screenshots below are from that run.
 
-| Map | Shows | Opens on |
-|---|---|---|
-| Districts | Exposed building footprint per district, in five bands, defences holding | the whole city |
-| Flood zones | The Vltava and small-stream zones, with every exposed building coloured by the most frequent flood it touches | the Vltava-Berounka confluence (Radotín, Zbraslav, Lipence) |
-| Defences fail | The area the city's defences protect, and the 4,610 buildings in it | Holešovice, Karlín and the Old Town |
+**Exposed building footprint by district, defences holding.** Praha 16, 6, 7 and 4 are
+in the top band; 11 districts have no exposed buildings.
+
+![Districts shaded by exposed building footprint](docs/img/map_districts.png)
+
+**Buildings in the flood zones, at the Vltava-Berounka confluence.** Each building is
+coloured by the most frequent flood it touches: mostly Q20 here, on the island and along
+Radotín's riverside. The Vltava zones are blue, darker for more frequent floods; small
+streams are teal.
+
+![Exposed buildings in the flood zones at Radotín and Zbraslav](docs/img/map_flood_zones.png)
+
+**If the defences fail.** The 4,610 buildings (purple) on the area the city's defences
+protect (lavender) in Holešovice, Karlín and the Old Town, beside the Vltava's Q100
+extent (blue). While the defences hold, the water stops at the edge of the blue.
+
+![Residual-risk buildings behind the flood defences in central Prague](docs/img/map_defences_fail.png)
 
 Colours, layers, tooltips and starting views are defined in code
 ([`maps.py`](src/prague_flood/maps.py)), so the maps come out the same on every run and
 nothing is styled by hand. Each map is also saved as one standalone HTML file that opens
-in any browser. Two display-only steps keep those files light (0.4 to 7 MB) without
-touching the analysis:
+in any browser. Wherobots ships an older keplergl than the 0.4 used locally. The files it
+wrote have the same sizes (17.4 and 14.5 MB) as a local render with keplergl 0.3.7, which
+bundles kepler.gl 3, and `maps.py` adapts to whichever version is installed. That older
+package embeds the whole kepler.gl app in each file, so the Wherobots HTML files are 12 to
+17 MB, against 0.4 to 7 MB locally. Two display-only steps keep them as light as they
+are, without touching the analysis:
 
 - **Simplified outlines.** Zone and district outlines are simplified to 2 m and 5 m.
 - **Ordered labels.** Categories carry numbered labels ("1 · Q5" ...), because kepler.gl
@@ -242,6 +259,11 @@ What the first attempts ran into, all now handled in the code or the guide:
 - **Wherobots defaults to 1,500 shuffle partitions.** That is far more than this data
   needs (locally the pipeline uses 16), but its adaptive execution coped, and the run was
   measured with the defaults untouched.
+- **Wherobots ships an older kepler.gl package than the local one.** The first maps run
+  failed on saving: its `save_to_html` has no page-title argument, and its map widget
+  cannot send empty numbers (`NaN`). `maps.py` now passes only the arguments the
+  installed version accepts, picks the basemap that version knows, and keeps empty
+  numbers out of the map tables.
 
 ## Known limitations
 
