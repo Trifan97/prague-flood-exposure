@@ -1,4 +1,8 @@
-# Building the CARTO map
+# Building the CARTO map (alternative)
+
+> The project's maps are built on Wherobots with kepler.gl: see the README's Maps
+> section and `src/prague_flood/maps.py`. This guide is the alternative for anyone who
+> wants a CARTO dashboard from the same files; it remains correct.
 
 This guide turns the three GeoParquet files from `python -m prague_flood run` into a CARTO
 Builder map with three layers and four widgets. The menu names follow CARTO Builder as

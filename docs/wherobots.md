@@ -113,6 +113,31 @@ inputs straight into Storage is not an option: its web upload silently skipped t
 - The timings from cells 7, 8 and 10 (and 9 if you ran it).
 - The runtime size you chose, and the usage the console shows for the run.
 
+## H. The maps notebook (for screenshots)
+
+`wherobots_maps.ipynb` renders the three interactive maps (kepler.gl, through
+SedonaKepler). Their styling is defined in `src/prague_flood/maps.py`, so you only run
+it, take screenshots and destroy the runtime: about 10 minutes of runtime.
+
+1. Upload `notebooks\wherobots_maps.ipynb` to `My Files/prague-flood/`, next to the
+   code zip. The inputs from the run notebook are still in `RAW_URI` (Managed Storage
+   keeps them), so they do not need uploading again.
+2. Start a notebook (part D), open `wherobots_maps.ipynb`, paste the same `RAW_URI` into
+   the first cell, and **Run > Run All Cells**.
+3. Cell 6 must print `ok` for all 8 inputs. Cell 7 installs kepler.gl's package if the
+   runtime lacks it; if a map then stays blank, reload the browser tab (F5) and run that
+   map's cell again. The kernel and its data survive a reload.
+4. For each map:
+   - collapse kepler's side panel with the `<` arrow at its top right;
+   - open the legend with the list icon in the column of buttons on the right;
+   - take the screenshot (on Windows, Win+Shift+S).
+5. Download the three `.html` files from `prague-flood/outputs/maps/`. Each one is the
+   interactive map on its own, and opens in any browser.
+6. **Destroy** the runtime.
+
+Save the screenshots as `docs/img/map_districts.png`, `docs/img/map_flood_zones.png` and
+`docs/img/map_defences_fail.png`, and the README's Maps section can show them.
+
 ## If something fails
 
 - **Cell 4: `want one prague_flood-*.zip`.** There are zero or several zips next to the

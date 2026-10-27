@@ -7,8 +7,8 @@
 Which Prague buildings sit inside official flood zones, and which of the city's 57
 districts (*městské části*) have the most exposed building stock? The pipeline answers
 that with a distributed spatial join in [Apache Sedona](https://sedona.apache.org/)
-on [Wherobots](https://wherobots.com/), and exports one clean GeoParquet table for a
-CARTO map.
+on [Wherobots](https://wherobots.com/), exports clean GeoParquet tables, and draws
+interactive kepler.gl maps of the results on Wherobots.
 
 ## Results
 
@@ -45,6 +45,30 @@ Behind the defences, the order changes completely: **Praha 8 (61.2 ha), Praha 1
 central riverside districts, including Karlín (Praha 8), one of the areas worst hit by
 the 2002 flood. 11 of the 57 districts have no exposed buildings at all.
 
+## Maps
+
+Three interactive maps, rendered on Wherobots with SedonaKepler (kepler.gl):
+
+| Map | Shows | Opens on |
+|---|---|---|
+| Districts | Exposed building footprint per district, in five bands, defences holding | the whole city |
+| Flood zones | The Vltava and small-stream zones, with every exposed building coloured by the most frequent flood it touches | the Vltava-Berounka confluence (Radotín, Zbraslav, Lipence) |
+| Defences fail | The area the city's defences protect, and the 4,610 buildings in it | Holešovice, Karlín and the Old Town |
+
+Colours, layers, tooltips and starting views are defined in code
+([`maps.py`](src/prague_flood/maps.py)), so the maps come out the same on every run and
+nothing is styled by hand. Each map is also saved as one standalone HTML file that opens
+in any browser. Two display-only steps keep those files light (0.4 to 7 MB) without
+touching the analysis:
+
+- **Simplified outlines.** Zone and district outlines are simplified to 2 m and 5 m.
+- **Ordered labels.** Categories carry numbered labels ("1 · Q5" ...), because kepler.gl
+  orders legends alphabetically.
+
+Render them locally with `python -m prague_flood maps`, or on Wherobots with
+[`notebooks/wherobots_maps.ipynb`](notebooks/wherobots_maps.ipynb) (see
+[`docs/wherobots.md`](docs/wherobots.md), part H).
+
 ## What it does
 
 1. Load the official IPR Praha flood zones, Overture building footprints and the
@@ -55,7 +79,7 @@ the 2002 flood. 11 of the 57 districts have no exposed buildings at all.
    flood it is exposed to (Q5, Q20, Q50 or Q100). Buildings behind the city's flood
    defences are flagged separately as residual risk.
 4. Count exposed buildings and their footprint area per flood zone and per district.
-5. Rank districts by exposure and export GeoParquet for CARTO.
+5. Rank districts by exposure, export GeoParquet, and render three kepler.gl maps.
 
 ## Scope
 
@@ -293,8 +317,8 @@ running it twice.
 ## Outputs
 
 `python -m prague_flood run` writes three GeoParquet files in WGS84 to `data/processed/`.
-[`docs/carto.md`](docs/carto.md) walks through building the CARTO map from them, click by
-click.
+They load into any GIS. For a CARTO dashboard instead of the kepler.gl maps,
+[`docs/carto.md`](docs/carto.md) walks through building one from them, click by click.
 
 | File | Rows | One row per |
 |---|---:|---|
@@ -361,8 +385,9 @@ python -m pip install -e . --no-deps
 . .\scripts\dev_env.ps1
 python -m prague_flood download   # ~80 MB of inputs into data/raw (about 7 minutes)
 python -m prague_flood run        # the Sedona pipeline; GeoParquet into data/processed (~1 min)
+python -m prague_flood maps       # the three kepler.gl maps as HTML in data/processed/maps
 python benchmarks/geopandas_baseline.py   # the same analysis in GeoPandas, compared (~20 s)
-pytest                            # everything, including Spark and data tests (~3 min)
+pytest                            # everything, including Spark and data tests (~6 min)
 pytest -m "not spark"             # fast tests only, no JVM
 ```
 
@@ -402,17 +427,19 @@ src/prague_flood/     the pipeline package
   join.py             buildings to districts and hazard zones: one row per building
   aggregate.py        district and flood-class totals, ranked by exposed footprint area
   export.py           small results to GeoParquet in WGS84, via GeoPandas
-  pipeline.py         the whole analysis: python -m prague_flood run
+  pipeline.py         the whole analysis: python -m prague_flood run | maps
+  maps.py             the three kepler.gl maps, styled in code (optional extra [maps])
 tests/                pytest suite (markers: `spark` needs Java, `data` needs data/raw)
 benchmarks/
   geopandas_baseline.py      the same analysis in GeoPandas: timing and cross-check
 notebooks/
   wherobots_run.ipynb        the cloud run, built by scripts/build_notebook.py
   wherobots_run_2026-10-26.ipynb   that notebook as run on Wherobots, with its output
+  wherobots_maps.ipynb       the three maps on Wherobots, built the same way
 scripts/
   dev_env.ps1                points this PowerShell window at the project's JDK and venv
   package_for_wherobots.py   zips the committed package for Wherobots (git archive)
-  build_notebook.py          builds notebooks/wherobots_run.ipynb from plain Python
+  build_notebook.py          builds both Wherobots notebooks from plain Python
   compare_outputs.py         compares two sets of outputs cell by cell
 docs/
   carto.md            click-by-click CARTO Builder guide

@@ -24,15 +24,16 @@ def download() -> None:
     print(f"{'buildings':<18} {path}")
 
 
-def run() -> None:
+def spark_stage(stage: str) -> None:
     # Imported here so `download` works without starting Java.
-    from prague_flood.pipeline import run as run_pipeline
+    from prague_flood import pipeline
     from prague_flood.session import local_session
 
+    work = pipeline.run if stage == "run" else pipeline.make_maps
     spark = local_session()
     try:
-        for name, path in run_pipeline(spark).items():
-            print(f"{name:<10} {path}")
+        for name, path in work(spark).items():
+            print(f"{name:<14} {path}")
     finally:
         spark.stop()
 
@@ -42,12 +43,13 @@ def main(argv: list[str] | None = None) -> None:
     stages = parser.add_subparsers(dest="stage", required=True)
     stages.add_parser("download", help="fetch the IPR layers and the Overture buildings extract")
     stages.add_parser("run", help="join, aggregate and export GeoParquet to data/processed")
+    stages.add_parser("maps", help="save the kepler.gl maps as HTML to data/processed/maps")
     args = parser.parse_args(argv)
 
     if args.stage == "download":
         download()
-    elif args.stage == "run":
-        run()
+    else:
+        spark_stage(args.stage)
 
 
 if __name__ == "__main__":
