@@ -61,5 +61,5 @@ def test_zones_file(outputs: dict[str, gpd.GeoDataFrame]) -> None:
     zones = outputs["zones"]
     assert len(zones) == 2_229  # whole zones, not the 7,940 join pieces
     assert zones["zone"].nunique() == 7
-    # Sum of the seven zone areas measured in step 3 (97.36 km²).
+    # Sum of the seven zones' areas in UTM 33N (97.36 km²), unchanged by the export.
     assert zones["area_ha"].sum() == pytest.approx(9_735.6, rel=1e-3)

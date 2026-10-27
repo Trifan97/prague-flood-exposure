@@ -22,7 +22,7 @@ the barriers hold.
 |---|---:|---:|---:|---:|
 | Q5 | 1,264 | 12.9 | 1,253 | 799 |
 | Q20 | 1,454 | 36.3 | 1,448 | 1,032 |
-| Q50 | 451 | 16.2 | 433 | 262 |
+| Q50 | 451 | 16.1 | 433 | 262 |
 | Q100 | 2,252 | 43.2 | 1,575 | 1,623 |
 | **Exposed, defences holding** | **5,421** | **108.6** | **4,709** | **3,716** |
 | Residual: behind the defences only | 4,610 | 181.4 | n/a | 4,058 |
@@ -38,7 +38,7 @@ Districts ranked by exposed footprint (defences holding):
 | 5 | Praha-Zbraslav | 8.4 | 18% | 785 | 1 |
 | 6 | Praha 10 | 7.5 | 2% | 250 | 9 |
 | 7 | Praha-Lipence | 6.9 | 29% | 577 | 3 |
-| 8 | Praha-Velká Chuchle | 5.6 | 25% | 237 | 10 |
+| 8 | Praha-Velká Chuchle | 5.5 | 25% | 237 | 10 |
 
 Behind the defences, the order changes completely: **Praha 8 (61.2 ha), Praha 1
 (49.5 ha) and Praha 7 (31.7 ha)** hold the most residual-risk footprint. These are the
@@ -62,8 +62,8 @@ streams are teal.
 
 ![Exposed buildings in the flood zones at Radotín and Zbraslav](docs/img/map_flood_zones.png)
 
-**If the defences fail.** The 4,610 buildings (purple) on the area the city's defences
-protect (lavender) in Holešovice, Karlín and the Old Town, beside the Vltava's Q100
+**If the defences fail.** Buildings behind the defences (purple) on the area the city's
+defences protect (lavender), here in the Old Town and Karlín, beside the Vltava's Q100
 extent (blue). While the defences hold, the water stops at the edge of the blue.
 
 ![Residual-risk buildings behind the flood defences in central Prague](docs/img/map_defences_fail.png)
@@ -139,10 +139,10 @@ outlines:
 | **Total** | **2,229** | | **7,940** |
 
 The pieces do not overlap, so every zone's area is unchanged (checked by a data test).
-On the development laptop (local Spark, 4 cores), joining the 306,290 buildings to the
-7,940 pieces with `ST_Intersects` takes about 10 seconds. The same join against the
-2,229 unsplit zones was cancelled after 10 minutes without finishing, so splitting made
-it at least 60 times faster here. The two runs could not be compared row by row because
+On the development laptop (local Spark, 4 cores, 8 threads), joining the 306,290
+buildings to the 7,940 pieces with `ST_Intersects` takes about 10 seconds. The same join
+against the 2,229 unsplit zones was cancelled after 10 minutes without finishing, so
+splitting made it at least 60 times faster here. The two runs could not be compared row by row because
 the unsplit one never finished; the area test is what shows the split loses nothing.
 
 ### The join
@@ -167,7 +167,7 @@ they are *broadcast*: every worker gets a copy with an R-tree index (Sedona's
 `BroadcastIndexJoin`), and the 300,000 buildings never move between workers. The
 alternative, Sedona's `RangeJoin`, partitions both sides by space and shuffles them.
 Both give identical results (checked in a unit test, on the full city, and on
-Wherobots). On the development laptop (4 cores, second runs), the whole exposure step
+Wherobots). On the development laptop (8 threads, second runs), the whole exposure step
 took 7.2 s broadcast and 14.7 s with the RangeJoin: about half the time. On the
 Wherobots cluster the two were level (4.0 s and 3.5 s). There, the buildings are already
 spread across workers, so partitioning them by space costs about as much as copying the
@@ -202,16 +202,18 @@ baseline, and an independent check. GeoPandas computes on GEOS and Sedona on JTS
 two classify **all 10,031 exposed and residual buildings identically, with no
 differences**, under both exposure rules.
 
-Timings, all on the current code and inputs:
+Timings, all on the same inputs and analysis code:
 
 | Engine | Machine | Flood zones | Join | End to end |
 |---|---|---|---:|---:|
 | GeoPandas | laptop, 1 core | whole (2,229) | 620 s, plus 123 s for the point rule | 759 s, read to classified |
 | GeoPandas | laptop, 1 core | split, at most 256 vertices (7,065 pieces) | 1.3 s, plus 0.2 s | **19 s**, read to classified |
-| Apache Sedona 1.9.1, Spark 4.1.3 | laptop, 4 cores | split (7,940 pieces) | 7.2 s broadcast, 14.7 s RangeJoin | 56 s, full pipeline (JVM start, totals, export) |
+| Apache Sedona 1.9.1, Spark 4.1.3 | laptop, 4 cores (8 threads) | split (7,940 pieces) | 7.2 s broadcast, 14.7 s RangeJoin | 56 s, full pipeline (JVM start, totals, export) |
 | WherobotsDB, Spark 4.1.3 | Wherobots, 12 cores | split (7,940 pieces) | 4.0 s broadcast, 3.5 s RangeJoin | 41 s: 26 s load and prepare, 15 s join, totals and export |
 
-The Sedona join times are the second of two runs, and cover the whole exposure step:
+Shapely has no `ST_SubDivide`, so the baseline splits the zones with its own halving
+function, which cuts them into 7,065 pieces rather than Sedona's 7,940. The Sedona join
+times are the second of two runs, and cover the whole exposure step:
 districts, the hazard join and the grouping by class. Loading and preparing the inputs
 took the same on both Sedona machines (26.8 s on the laptop, 26.4 s on Wherobots).
 
@@ -221,7 +223,8 @@ What this shows:
   in memory. Spark's fixed costs (starting the JVM, scheduling tasks, moving geometries
   between processes) outweigh the actual work.
 - **The big win came from splitting the polygons, not from the engine.** Splitting made
-  the join about 40 times faster in GeoPandas and at least 60 times faster in Sedona.
+  the GeoPandas join about 500 times faster (the whole run about 40 times), and the
+  Sedona join at least 60 times faster.
 - **The cluster sped up the join, not the whole run.** Wherobots joined about twice as
   fast as the laptop's Spark, but most of the run is loading and preparing data, which
   took the same 26 seconds on both.
@@ -231,11 +234,13 @@ What this shows:
 
 ## Running on Wherobots
 
-The same committed code ran on a Wherobots runtime on 26 October 2026, from
+Commit `f276f96` ran on a Wherobots runtime on 26 October 2026, from
 [`notebooks/wherobots_run.ipynb`](notebooks/wherobots_run.ipynb). The executed copy,
 with its printed output, is
 [`notebooks/wherobots_run_2026-10-26.ipynb`](notebooks/wherobots_run_2026-10-26.ipynb);
-only the storage path is redacted.
+only the storage path is redacted. Later commits added the maps and left the analysis
+unchanged. On 27 October 2026, a fresh clone rebuilt every input from source, passed all
+115 tests, and reproduced the three output files cell by cell.
 
 - **The runtime:** Python 3.12.3 and Spark 4.1.3, with WherobotsDB (Wherobots' own
   Sedona build) running a native acceleration engine and Comet. Spark reported 12 cores.
@@ -278,8 +283,8 @@ What the first attempts ran into, all now handled in the code or the guide:
   the full city it counts 13% fewer exposed buildings (4,709 against 5,421). Footprint
   areas are whole buildings, not the part inside the zone.
 - **Flood defences are assumed to hold.** Central Prague is protected by permanent and
-  mobile barriers, and IPR draws the Q-zones with them in place: only about 1% of the
-  area the city protects lies inside the Q100 extent. The exposure counts are therefore
+  mobile barriers, and IPR draws the Q-zones with them in place: only 1.4% of the area
+  the city protects lies inside the Q100 extent. The exposure counts are therefore
   for the case where the defences hold. Buildings behind the defences are reported
   separately as residual risk (flooded only if the defences fail), using IPR's 2014
   categorised layer. That older layer does not cover 1.6 km² of the 2021 Q100 extent.
@@ -294,8 +299,8 @@ What the first attempts ran into, all now handled in the code or the guide:
 - **Buildings are not complete or valued.** Of the 208,636 Overture footprints that
   intersect Prague, 83.6% come from OpenStreetMap and the rest from Microsoft's
   machine-learned footprints. Counts and areas measure exposure, not value or loss.
-  Height is recorded for only 0.5% of buildings, so volume or floor area cannot be
-  estimated reliably; the number of floors is known for 51%.
+  Height is recorded for only 0.6% of them, so volume or floor area cannot be estimated
+  reliably; the number of floors is known for 53%.
 - **Exposed buildings lean on machine-learned footprints.** They are 38% of the exposed
   buildings but only 16% of all buildings, and 80% of the exposed buildings in Praha 8.
   They are mostly small (median 29 m²) and carry no attributes, so the counts in those
@@ -304,9 +309,9 @@ What the first attempts ran into, all now handled in the code or the guide:
   can be rebuilt from source only until release 2026-10-21.0 is deleted. IPR may
   republish its layers at any time. In both cases the SHA-256 pins make the pipeline stop
   instead of silently using different data.
-- **This is not big data.** About 210,000 buildings would fit a laptop. Sedona is used
-  to learn a pattern that scales unchanged to national or global extents. The README
-  will report a GeoPandas comparison on the same data.
+- **This is not big data.** About 210,000 buildings fit on a laptop. Sedona is used to
+  learn a pattern that scales unchanged to national or global extents; the GeoPandas
+  comparison above shows what that costs at city scale.
 
 ## Data
 
@@ -332,9 +337,9 @@ buildings file read fine on Wherobots. So the download stage converts each layer
 to GeoParquet (11 MB in total, against 40 MB of GeoJSON) and pins the copies by
 SHA-256; converting twice gives identical bytes. Overture's
 buildings cover the planet, so `overture.py` reads only the parts of the S3 files whose
-bounding-box statistics overlap Prague. That takes about 6 minutes. The extract is
-sorted by building id, so rerunning it produces the same bytes; that was checked by
-running it twice.
+bounding-box statistics overlap Prague. That takes 3 to 6 minutes, depending on the
+connection. The extract is sorted by building id, so rerunning it produces the same
+bytes: a rebuild from a fresh clone on 27 October 2026 matched the pinned SHA-256.
 
 ## Outputs
 
@@ -351,8 +356,9 @@ They load into any GIS. For a CARTO dashboard instead of the kepler.gl maps,
 The heavy work (re-projection, splitting, the joins) happens in Sedona. The outputs are
 small, so they are collected to the driver and written with GeoPandas, which works the
 same locally and on Wherobots. Areas are computed in UTM 33N before the geometries go
-back to WGS84 for CARTO. A data test re-projects the exported districts with PROJ (via
-GeoPandas), a second CRS library, and gets Prague's ~496 km² again.
+back to WGS84, which GIS tools, kepler.gl and CARTO expect. A data test re-projects the
+exported districts with PROJ (via GeoPandas), a second CRS library, and gets Prague's
+~496 km² again.
 
 ## Environment
 
@@ -393,8 +399,9 @@ use the unofficial builds. Two consequences:
   Central, checks their SHA-256 values against `config.py`, and `session.py` puts them
   straight onto the JVM classpath.
 - **Local Spark can read files but cannot write them.** Reading Parquet, spatial joins
-  and shuffles all work. Writing Parquet fails. Local runs are for tests on small
-  in-memory data; the full pipeline writes its outputs on Wherobots, which runs on Linux.
+  and shuffles all work; writing Parquet from Spark fails. The outputs are small, so the
+  pipeline collects them to the driver and writes them with GeoPandas instead (see
+  Outputs), which works the same here and on Wherobots.
 
 ## Quick start (Windows, PowerShell)
 
@@ -405,11 +412,11 @@ python -m pip install -r requirements.txt
 python -m pip install -e . --no-deps
 # Install Java (see above), then in every new window:
 . .\scripts\dev_env.ps1
-python -m prague_flood download   # ~80 MB of inputs into data/raw (about 7 minutes)
+python -m prague_flood download   # ~80 MB of inputs into data/raw (4 to 7 minutes)
 python -m prague_flood run        # the Sedona pipeline; GeoParquet into data/processed (~1 min)
 python -m prague_flood maps       # the three kepler.gl maps as HTML in data/processed/maps
 python benchmarks/geopandas_baseline.py   # the same analysis in GeoPandas, compared (~20 s)
-pytest                            # everything, including Spark and data tests (~6 min)
+pytest                            # everything, including Spark and data tests (3 to 6 min)
 pytest -m "not spark"             # fast tests only, no JVM
 ```
 
@@ -437,9 +444,9 @@ drive for that one install, for example `$env:TMP = "F:\pip-tmp"; $env:TEMP = $e
 pyproject.toml        package metadata, loose dependency ranges, pytest/ruff/mypy settings
 requirements.txt      exact tested versions (pip freeze)
 src/prague_flood/     the pipeline package
-  __main__.py         command line: python -m prague_flood download | run
+  __main__.py         command line: python -m prague_flood download | run | maps
   config.py           paths, CRSs, pinned inputs and copies (SHA-256), outputs
-  download.py         checksum-verified downloads of the IPR layers
+  download.py         checksum-verified downloads (IPR layers, Sedona jars)
   convert.py          IPR GeoJSON to pinned GeoParquet copies (what Spark reads)
   overture.py         DuckDB extract of Prague's buildings from Overture on S3
   duck.py             the DuckDB connection used by convert.py and overture.py
@@ -464,15 +471,23 @@ scripts/
   build_notebook.py          builds both Wherobots notebooks from plain Python
   compare_outputs.py         compares two sets of outputs cell by cell
 docs/
-  carto.md            click-by-click CARTO Builder guide
+  carto.md            click-by-click CARTO Builder guide (an alternative to the maps)
   wherobots.md        set-up and run checklist for Wherobots
+  img/                the map screenshots from the Wherobots run
 data/raw/             downloaded inputs (git-ignored, re-created by the download stage)
 data/processed/       GeoParquet outputs (git-ignored, re-created by the run stage)
 ```
 
 ## Licence
 
-Code: MIT (see `LICENSE`). Data keeps its source licence (see the Data table).
+Code: MIT (see `LICENSE`). Data keeps its source licence (see the Data table):
+
+- **Flood zones and districts:** data base © IPR Praha, CC BY 4.0.
+- **Buildings:** © OpenStreetMap contributors, Overture Maps Foundation, and Microsoft
+  ML Buildings, ODbL. Anything derived from them carries that licence too, including
+  the GeoParquet outputs and the HTML maps, which embed the building data.
+- **Map screenshots** (`docs/img/`): both of the above, on a basemap © CARTO,
+  © OpenStreetMap contributors.
 
 ## Verdict
 

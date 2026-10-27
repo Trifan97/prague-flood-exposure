@@ -75,7 +75,7 @@ This is the choropleth that carries the ranking.
    | Very high | 10 and above |
 
    *Why custom breaks:* 11 of the 57 districts have no exposure, and the rest are very
-   skewed (from a few hundred m² up to 18.8 ha). Builder's automatic classes would put
+   skewed (from under 100 m² up to 18.8 ha). Builder's automatic classes would put
    most districts in one colour.
 
 4. **Opacity** about 70%. **Stroke:** white, 1 px, so district borders stay visible.
@@ -188,7 +188,7 @@ flood") and that the classes are sorted by **Value**: Q5 first, residual last.
    Buildings: © Overture Maps Foundation, © OpenStreetMap contributors,
    Microsoft ML Buildings (ODbL).
 
-   Method and code: <link to the GitHub repository>
+   Method and code: https://github.com/Trifan97/prague-flood-exposure
    ```
 
    The attribution is also in `config.ATTRIBUTION`. Keep it: both licences require it.

@@ -8,7 +8,7 @@ One row per piece of a zone:
                     or 'protected_by_city'
     geometry        at most config.MAX_VERTICES vertices, EPSG:32633
 
-The Vltava extents stay nested (the Q100 zone contains the Q5 zone). In step 4 each building
+The Vltava extents stay nested (the Q100 zone contains the Q5 zone). In join.py each building
 takes the smallest return period it touches, so the nesting needs no geometry work.
 """
 

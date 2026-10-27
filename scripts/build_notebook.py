@@ -239,7 +239,7 @@ for name, path in outputs.items():
 2. Save this notebook with its outputs (**File > Download**), so the run is on record.
 3. **Destroy the runtime** in the Wherobots console. Billing stops only when it is
    destroyed; the idle timeout does not stop it.
-4. Send back the printed versions and the timings from cells 7, 8 and 10 (and 9 if you
+4. Record the printed versions and the timings from cells 7, 8 and 10 (and 9 if you
    ran it) for the README.
 """
     ),

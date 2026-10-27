@@ -3,7 +3,8 @@
 The local pipeline runs on a laptop. This guide runs the same committed code on a
 Wherobots runtime, checks that it gives identical results, and times the join.
 
-The Wherobots trial runs for 14 days or $95 of usage, whichever comes first. Uploading
+The Wherobots trial runs for 14 days or $95 of usage, whichever comes first (as of
+October 2026). Uploading
 files costs nothing; **billing starts only when a notebook runtime is running** (part D)
 and stops only when you **Destroy** it (part F). Do parts A to C first, at your own pace.
 
@@ -95,7 +96,8 @@ inputs straight into Storage is not an option: its web upload silently skipped t
    - **Cell 5** prints `copied` for all 8 inputs, and **cell 6** prints `ok` for all 8.
    - **Cell 8** prints `identical to the local run with both strategies`.
 
-   If any of them fails, go straight to part F (**Destroy**) and send me the error text.
+   If any of them fails, copy the error text, go straight to part F (**Destroy**), and
+   see "If something fails" below.
 5. Leave `RUN_UNSPLIT_COMPARISON = False`, unless you want to spend up to 10 more
    minutes finding out whether a cluster rescues the unsplit join.
 
@@ -107,7 +109,7 @@ inputs straight into Storage is not an option: its web upload silently skipped t
 3. Back on the Wherobots console, click **Destroy** on the notebook. Only Destroy stops
    the billing; the idle timeout does not.
 
-## G. Send back for the README
+## G. Record for the README
 
 - The versions printed by cell 3 (Python, Spark, and the number of cores).
 - The timings from cells 7, 8 and 10 (and 9 if you ran it).
